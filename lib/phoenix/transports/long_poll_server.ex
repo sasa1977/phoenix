@@ -42,7 +42,7 @@ defmodule Phoenix.Transports.LongPoll.Server do
 
   def init([endpoint, handler, transport_name, transport,
             params, window_ms, priv_topic]) do
-    case Phoenix.Channel.Driver.init(params, {endpoint, handler, transport_name, transport}) do
+    case Phoenix.Channel.Driver.init(endpoint, handler, transport_name, transport, params) do
       {:ok, dlg_state} ->
         state = %{buffer: [],
                   dlg_state: dlg_state,

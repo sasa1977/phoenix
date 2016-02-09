@@ -1,5 +1,6 @@
 defmodule Phoenix.Socket.Dialogue do
-  @callback init(dlg_params :: any, dlg_opts :: any) ::
+  # TODO(sj): consider bundling these args into a struct
+  @callback init(endpoint :: atom, handler :: atom, transport_name :: atom, transport :: atom, params :: any) ::
     {:ok, initial_state :: any} | :error
 
   @callback handle_in(message :: any, dlg_state :: any) ::

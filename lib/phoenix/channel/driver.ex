@@ -5,11 +5,11 @@ defmodule Phoenix.Channel.Driver do
   alias Phoenix.Socket.Transport
 
   @doc false
-  def init(dlg_params, {endpoint, handler, transport_name, transport}) do
+  def init(endpoint, handler, transport_name, transport, params) do
     {_, opts} = handler.__transport__(transport_name)
     serializer = Keyword.fetch!(opts, :serializer)
 
-    case Transport.connect(endpoint, handler, transport_name, transport, serializer, dlg_params) do
+    case Transport.connect(endpoint, handler, transport_name, transport, serializer, params) do
       :error -> :error
 
       {:ok, socket} ->

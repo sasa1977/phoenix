@@ -66,7 +66,7 @@ defmodule Phoenix.Transports.WebSocket do
 
     case conn do
       %{halted: false} = conn ->
-        case Phoenix.Channel.Driver.init(conn.params, {endpoint, handler, transport, __MODULE__}) do
+        case Phoenix.Channel.Driver.init(endpoint, handler, transport, __MODULE__, conn.params) do
           {:ok, dlg_state} ->
             {:ok, conn, {__MODULE__, {dlg_state, opts}}}
           :error ->
