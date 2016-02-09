@@ -102,10 +102,4 @@ defmodule Phoenix.Socket.Transport do
   See `web/static/js/phoenix.js` for an example transport client
   implementation.
   """
-
-  # TODO(sj): this behaviour should be moved elsewhere
-  @doc """
-  Provides a keyword list of default configuration for socket transports.
-  """
-  @callback default_config() :: Keyword.t
 end

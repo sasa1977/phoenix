@@ -38,7 +38,7 @@ defmodule Phoenix.Transports.WebSocket do
   `{:text | :binary, String.t | binary}`.
   """
 
-  @behaviour Phoenix.Socket.Transport
+  @behaviour Phoenix.Transport
 
   def default_config() do
     [serializer: Phoenix.Transports.WebSocketSerializer,

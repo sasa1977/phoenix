@@ -35,7 +35,7 @@ defmodule Phoenix.Transports.LongPoll do
 
   ## Transport callbacks
 
-  @behaviour Phoenix.Socket.Transport
+  @behaviour Phoenix.Transport
 
   def default_config() do
     [window_ms: 10_000,
