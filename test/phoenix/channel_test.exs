@@ -79,8 +79,8 @@ defmodule Phoenix.Channel.ChannelTest do
     socket = %Phoenix.Socket{serializer: Phoenix.ChannelTest.NoopSerializer,
                              topic: "sometopic", transport_pid: self(), joined: true}
     push(socket, "event1", %{key: :val})
-    assert_receive %Phoenix.Socket.Message{
-      event: "event1", payload: %{key: :val}, topic: "sometopic"}
+    assert_receive {:channel_push, %Phoenix.Socket.Message{
+      event: "event1", payload: %{key: :val}, topic: "sometopic"}}
   end
 
   test "pushing when not joined" do
@@ -96,8 +96,8 @@ defmodule Phoenix.Channel.ChannelTest do
                              topic: "sometopic", transport_pid: self(), joined: true,}
     ref = socket_ref(socket)
     reply(ref, {:ok, %{key: :val}})
-    assert_receive %Phoenix.Socket.Reply{
-      payload: %{key: :val}, ref: "123", status: :ok, topic: "sometopic"}
+    assert_receive {:channel_push, %Phoenix.Socket.Reply{
+      payload: %{key: :val}, ref: "123", status: :ok, topic: "sometopic"}}
   end
 
   test "socket_ref raises ArgumentError when socket is not joined or has no ref" do

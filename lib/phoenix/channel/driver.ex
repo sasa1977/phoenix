@@ -59,12 +59,7 @@ defmodule Phoenix.Channel.Driver do
     {:stop, {:shutdown, :disconnected}, state}
   end
 
-  # TODO(sj): we need to unify the format of message sent from the channel process
-  def handle_info(%Message{} = out_message, state) do
-    {:ok, [out_message], state}
-  end
-
-  def handle_info({:socket_push, _, _} = out_message, state) do
+  def handle_info({:channel_push, out_message}, state) do
     {:ok, [out_message], state}
   end
 

@@ -136,7 +136,7 @@ defmodule Phoenix.Channel.Server do
     encoded_msg = serializer.encode!(%Message{topic: topic,
                                               event: event,
                                               payload: payload})
-    send pid, encoded_msg
+    send pid, {:channel_push, encoded_msg}
     :ok
   end
   def push(_, _, _, _), do: raise_invalid_message
@@ -147,9 +147,9 @@ defmodule Phoenix.Channel.Server do
   def reply(pid, ref, topic, {status, payload}, serializer)
       when is_binary(topic) and is_map(payload) do
 
-    send pid, serializer.encode!(
+    send pid, {:channel_push, serializer.encode!(
       %Reply{topic: topic, ref: ref, status: status, payload: payload}
-    )
+    )}
     :ok
   end
   def reply(_, _, _, _, _), do: raise_invalid_message
@@ -269,7 +269,7 @@ defmodule Phoenix.Channel.Server do
               cache
             :error ->
               encoded_msg = serializer.fastlane!(msg)
-              send(fastlane_pid, encoded_msg)
+              send(fastlane_pid, {:channel_push, encoded_msg})
               Map.put(cache, serializer, encoded_msg)
           end
         end

@@ -410,9 +410,9 @@ defmodule Phoenix.ChannelTest do
   """
   defmacro assert_push(event, payload, timeout \\ 100) do
     quote do
-      assert_receive %Phoenix.Socket.Message{
+      assert_receive {:channel_push, %Phoenix.Socket.Message{
                         event: unquote(event),
-                        payload: unquote(payload)}, unquote(timeout)
+                        payload: unquote(payload)}}, unquote(timeout)
     end
   end
 
@@ -452,10 +452,10 @@ defmodule Phoenix.ChannelTest do
   defmacro assert_reply(ref, status, payload \\ Macro.escape(%{}), timeout \\ 100) do
     quote do
       ref = unquote(ref)
-      assert_receive %Phoenix.Socket.Reply{
+      assert_receive {:channel_push, %Phoenix.Socket.Reply{
                         ref: ^ref,
                         status: unquote(status),
-                        payload: unquote(payload)}, unquote(timeout)
+                        payload: unquote(payload)}}, unquote(timeout)
     end
   end
 
