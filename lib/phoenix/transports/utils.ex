@@ -8,6 +8,15 @@ defmodule Phoenix.Transports.Utils do
   Usage of these functions is not mandatory, but it is recommended. If you
   want to retain the same semantics as stock transports, you're advised to
   invoke `init_plug_conn/5` before doing any other work.
+
+  ## Security
+
+  This module also provides functions to enable a secure environment
+  on transports that, at some point, have access to a `Plug.Conn`.
+
+  The functionality provided by this module help with doing "origin"
+  header checks and ensuring only SSL connections are allowed. See
+  `force_ssl/4` and `check_origin/5` for more details.
   """
   require Logger
 

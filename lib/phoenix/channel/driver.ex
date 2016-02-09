@@ -1,5 +1,24 @@
 # TODO(sj): move the file to the proper place
 defmodule Phoenix.Socket.Driver do
+  @moduledoc """
+  Implementation of the Phoenix Channels protocol.
+
+  The Phoenix Channels protocol describes how to hold multiple separate conversations
+  (channels) over a single persistent connection (socket). The connection is
+  powered by transports, such as websocket or long polling, while this module
+  provides the stock implementation of the protocol, with following properties:
+
+  - Each channel runs in a separate process.
+  - Channel processes are direct children of the socket process.
+  - Termination of a channel process doesn't affect other channel processes or
+    the socket process.
+  - If the socket process terminates, all channel processes will be stopped as well,
+    regardless of the exit reason.
+
+  This module was not meant to be used directly. Instead you can pass it as an option
+  to the transport (TODO(sj): explain how, once we settle on the approach). This
+  happens by default when your module is powered by `Phoenix.Socket`.
+  """
   @behaviour Phoenix.Transports.Driver
 
   require Logger
@@ -14,6 +33,7 @@ defmodule Phoenix.Socket.Driver do
   @doc """
   Returns the Channel Transport protocol version.
   """
+  # TODO(sj): do we really need to expose this? It seems to be used only in tests.
   def protocol_version, do: @protocol_version
 
   @doc false
@@ -196,7 +216,7 @@ defmodule Phoenix.Socket.Driver do
                                       payload: %{reason: "unmatched topic"}}}
   end
 
-  def on_exit_message(topic, reason) do
+  defp on_exit_message(topic, reason) do
     case reason do
       :normal        -> %Message{topic: topic, event: "phx_close", payload: %{}}
       :shutdown      -> %Message{topic: topic, event: "phx_close", payload: %{}}

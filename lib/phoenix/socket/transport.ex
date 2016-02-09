@@ -72,14 +72,6 @@ defmodule Phoenix.Socket.Transport do
 
   The function `on_exit_message/2` should aid with that.
 
-  ## Security
-
-  This module also provides functions to enable a secure environment
-  on transports that, at some point, have access to a `Plug.Conn`.
-
-  The functionality provided by this module help with doing "origin"
-  header checks and ensuring only SSL connections are allowed.
-
   ## Remote Client
 
   Channels can reply, synchronously, to any `handle_in/3` event. To match
