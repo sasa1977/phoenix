@@ -8,7 +8,7 @@ defmodule Phoenix.Tranports.WebSocketSerializerTest do
 
   test "encode!/1 encodes `Phoenix.Socket.Message` as JSON" do
     msg = %Message{topic: "t", event: "e", payload: "m"}
-    assert WebSocketSerializer.encode!(msg) == {:socket_push, :text, @msg_json}
+    assert WebSocketSerializer.encode!(msg) == {:text, @msg_json}
   end
 
   test "decode!/2 decodes `Phoenix.Socket.Message` from JSON" do

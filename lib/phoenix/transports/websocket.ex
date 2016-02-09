@@ -35,7 +35,7 @@ defmodule Phoenix.Transports.WebSocket do
   behaviour.
 
   The `encode!/1` function must return a tuple in the format
-  `{:socket_push, :text | :binary, String.t | binary}`.
+  `{:text | :binary, String.t | binary}`.
   """
 
   @behaviour Phoenix.Socket.Transport
@@ -125,19 +125,11 @@ defmodule Phoenix.Transports.WebSocket do
     {:shutdown, reason, %{state | dlg_state: dlg_state}}
   end
   defp handle_dlg_response({:ok, messages, dlg_state}, state) do
-    {:ok, encode_out_messages(messages), %{state | dlg_state: dlg_state}}
+    {:ok, messages, %{state | dlg_state: dlg_state}}
   end
   defp handle_dlg_response({:error, _reason, messages, dlg_state}, state) do
     # Error info is ignored, because there's no standard way to propagate it on websocket
-    {:ok, encode_out_messages(messages), %{state | dlg_state: dlg_state}}
-  end
-
-
-  defp encode_out_messages(messages) do
-    Enum.map(
-      messages,
-      fn({:socket_push, encoding, encoded_payload}) -> {encoding, encoded_payload} end
-    )
+    {:ok, messages, %{state | dlg_state: dlg_state}}
   end
 
 
