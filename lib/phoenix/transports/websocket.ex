@@ -58,7 +58,7 @@ defmodule Phoenix.Transports.WebSocket do
     |> Phoenix.Transports.Utils.init_plug_conn(endpoint, handler, transport)
     |> case do
       %{halted: false} = conn ->
-        case Phoenix.Channel.Driver.init(endpoint, handler, transport, __MODULE__, conn.params) do
+        case Phoenix.Socket.Driver.init(endpoint, handler, transport, __MODULE__, conn.params) do
           {:ok, driver_state} ->
             {:ok, conn, {__MODULE__, {driver_state, opts}}}
           :error ->
@@ -91,25 +91,25 @@ defmodule Phoenix.Transports.WebSocket do
   def ws_handle(opcode, payload, state) do
     payload
     |> state.serializer.decode!(opcode: opcode)
-    |> Phoenix.Channel.Driver.handle_in(state.driver_state)
+    |> Phoenix.Socket.Driver.handle_in(state.driver_state)
     |> handle_driver_response(state)
   end
 
   @doc false
   def ws_info(message, state) do
     message
-    |> Phoenix.Channel.Driver.handle_info(state.driver_state)
+    |> Phoenix.Socket.Driver.handle_info(state.driver_state)
     |> handle_driver_response(state)
   end
 
   @doc false
   def ws_terminate(reason, state) do
-    Phoenix.Channel.Driver.terminate(reason, state.driver_state)
+    Phoenix.Socket.Driver.terminate(reason, state.driver_state)
   end
 
   @doc false
   def ws_close(state) do
-    Phoenix.Channel.Driver.close(state.driver_state)
+    Phoenix.Socket.Driver.close(state.driver_state)
   end
 
 

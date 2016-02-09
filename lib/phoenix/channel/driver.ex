@@ -1,4 +1,5 @@
-defmodule Phoenix.Channel.Driver do
+# TODO(sj): move the file to the proper place
+defmodule Phoenix.Socket.Driver do
   @behaviour Phoenix.Transports.Driver
 
   require Logger

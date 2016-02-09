@@ -42,7 +42,7 @@ defmodule Phoenix.Transports.LongPoll.Server do
 
   def init([endpoint, handler, transport_name, transport,
             params, window_ms, priv_topic]) do
-    case Phoenix.Channel.Driver.init(endpoint, handler, transport_name, transport, params) do
+    case Phoenix.Socket.Driver.init(endpoint, handler, transport_name, transport, params) do
       {:ok, driver_state} ->
         state = %{buffer: [],
                   driver_state: driver_state,
@@ -66,7 +66,7 @@ defmodule Phoenix.Transports.LongPoll.Server do
   # Handle client dispatches
   def handle_info({:dispatch, client_ref, msg, ref}, state) do
     msg
-    |> Phoenix.Channel.Driver.handle_in(state.driver_state)
+    |> Phoenix.Socket.Driver.handle_in(state.driver_state)
     |> case do
       {:stop, reason, driver_state} ->
         {:stop, reason, %{state | driver_state: driver_state}}
@@ -107,7 +107,7 @@ defmodule Phoenix.Transports.LongPoll.Server do
 
   def handle_info(msg, state) do
     msg
-    |> Phoenix.Channel.Driver.handle_info(state.driver_state)
+    |> Phoenix.Socket.Driver.handle_info(state.driver_state)
     |> case do
       {:stop, reason, driver_state} ->
         {:stop, reason, %{state | driver_state: driver_state}}
@@ -118,7 +118,7 @@ defmodule Phoenix.Transports.LongPoll.Server do
   end
 
   def terminate(reason, state) do
-    Phoenix.Channel.Driver.terminate(reason, state.driver_state)
+    Phoenix.Socket.Driver.terminate(reason, state.driver_state)
   end
 
   defp broadcast_from!(state, client_ref, msg) when is_binary(client_ref),

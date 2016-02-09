@@ -155,7 +155,7 @@ defmodule Phoenix.ChannelTest do
   alias Phoenix.Socket.Message
   alias Phoenix.Socket.Broadcast
   alias Phoenix.Socket.Reply
-  alias Phoenix.Channel.Driver
+  alias Phoenix.Socket.Driver
   alias Phoenix.Channel.Server
 
   defmodule NoopSerializer do
