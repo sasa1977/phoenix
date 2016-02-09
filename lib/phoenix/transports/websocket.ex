@@ -103,8 +103,8 @@ defmodule Phoenix.Transports.WebSocket do
   end
 
   @doc false
-  def ws_terminate(reason, state) do
-    Phoenix.Socket.Driver.terminate(reason, state.driver_state)
+  def ws_terminate(_reason, _state) do
+    :ok
   end
 
   @doc false

@@ -117,8 +117,9 @@ defmodule Phoenix.Transports.LongPoll.Server do
     end
   end
 
-  def terminate(reason, state) do
-    Phoenix.Socket.Driver.terminate(reason, state.driver_state)
+  def terminate(:normal, state), do: Phoenix.Socket.Driver.close(state.driver_state)
+  def terminate(_reason, _state) do
+    :ok
   end
 
   defp broadcast_from!(state, client_ref, msg) when is_binary(client_ref),

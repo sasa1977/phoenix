@@ -79,9 +79,6 @@ defmodule Phoenix.Socket.Driver do
 
 
   @doc false
-  def terminate(_reason, _state), do: :ok
-
-  @doc false
   def close(state) do
     for {pid, _} <- state.channels_inverse do
       Phoenix.Channel.Server.close(pid)

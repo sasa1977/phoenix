@@ -14,6 +14,4 @@ defmodule Phoenix.Transports.Driver do
     {:stop, reason :: any, driver_state :: any}
 
   @callback close(driver_state :: any) :: any
-
-  @callback terminate(reason :: any, driver_state :: any) :: any
 end
