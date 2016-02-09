@@ -1,5 +1,5 @@
 defmodule Phoenix.Channel.Driver do
-  @behaviour Phoenix.Socket.Dialogue
+  @behaviour Phoenix.Transports.Driver
 
   require Logger
   alias Phoenix.Socket

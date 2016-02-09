@@ -59,8 +59,8 @@ defmodule Phoenix.Transports.WebSocket do
     |> case do
       %{halted: false} = conn ->
         case Phoenix.Channel.Driver.init(endpoint, handler, transport, __MODULE__, conn.params) do
-          {:ok, dlg_state} ->
-            {:ok, conn, {__MODULE__, {dlg_state, opts}}}
+          {:ok, driver_state} ->
+            {:ok, conn, {__MODULE__, {driver_state, opts}}}
           :error ->
             send_resp(conn, 403, "")
             {:error, conn}
@@ -76,11 +76,11 @@ defmodule Phoenix.Transports.WebSocket do
   end
 
   @doc false
-  def ws_init({dlg_state, opts}) do
+  def ws_init({driver_state, opts}) do
     {
       :ok,
       %{
-        dlg_state: dlg_state,
+        driver_state: driver_state,
         serializer: Keyword.fetch!(opts, :serializer)
       },
       Keyword.fetch!(opts, :timeout)
@@ -91,36 +91,36 @@ defmodule Phoenix.Transports.WebSocket do
   def ws_handle(opcode, payload, state) do
     payload
     |> state.serializer.decode!(opcode: opcode)
-    |> Phoenix.Channel.Driver.handle_in(state.dlg_state)
-    |> handle_dlg_response(state)
+    |> Phoenix.Channel.Driver.handle_in(state.driver_state)
+    |> handle_driver_response(state)
   end
 
   @doc false
   def ws_info(message, state) do
     message
-    |> Phoenix.Channel.Driver.handle_info(state.dlg_state)
-    |> handle_dlg_response(state)
+    |> Phoenix.Channel.Driver.handle_info(state.driver_state)
+    |> handle_driver_response(state)
   end
 
   @doc false
   def ws_terminate(reason, state) do
-    Phoenix.Channel.Driver.terminate(reason, state.dlg_state)
+    Phoenix.Channel.Driver.terminate(reason, state.driver_state)
   end
 
   @doc false
   def ws_close(state) do
-    Phoenix.Channel.Driver.close(state.dlg_state)
+    Phoenix.Channel.Driver.close(state.driver_state)
   end
 
 
-  defp handle_dlg_response({:stop, reason, dlg_state}, state) do
-    {:shutdown, reason, %{state | dlg_state: dlg_state}}
+  defp handle_driver_response({:stop, reason, driver_state}, state) do
+    {:shutdown, reason, %{state | driver_state: driver_state}}
   end
-  defp handle_dlg_response({:ok, messages, dlg_state}, state) do
-    {:ok, messages, %{state | dlg_state: dlg_state}}
+  defp handle_driver_response({:ok, messages, driver_state}, state) do
+    {:ok, messages, %{state | driver_state: driver_state}}
   end
-  defp handle_dlg_response({:error, _reason, messages, dlg_state}, state) do
+  defp handle_driver_response({:error, _reason, messages, driver_state}, state) do
     # Error info is ignored, because there's no standard way to propagate it on websocket
-    {:ok, messages, %{state | dlg_state: dlg_state}}
+    {:ok, messages, %{state | driver_state: driver_state}}
   end
 end

@@ -43,9 +43,9 @@ defmodule Phoenix.Transports.LongPoll.Server do
   def init([endpoint, handler, transport_name, transport,
             params, window_ms, priv_topic]) do
     case Phoenix.Channel.Driver.init(endpoint, handler, transport_name, transport, params) do
-      {:ok, dlg_state} ->
+      {:ok, driver_state} ->
         state = %{buffer: [],
-                  dlg_state: dlg_state,
+                  driver_state: driver_state,
                   window_ms: trunc(window_ms * 1.5),
                   priv_topic: priv_topic,
                   last_client_poll: now_ms(),
@@ -66,18 +66,18 @@ defmodule Phoenix.Transports.LongPoll.Server do
   # Handle client dispatches
   def handle_info({:dispatch, client_ref, msg, ref}, state) do
     msg
-    |> Phoenix.Channel.Driver.handle_in(state.dlg_state)
+    |> Phoenix.Channel.Driver.handle_in(state.driver_state)
     |> case do
-      {:stop, reason, dlg_state} ->
-        {:stop, reason, %{state | dlg_state: dlg_state}}
+      {:stop, reason, driver_state} ->
+        {:stop, reason, %{state | driver_state: driver_state}}
 
-      {:ok, messages, dlg_state} ->
+      {:ok, messages, driver_state} ->
         broadcast_from!(state, client_ref, {:dispatch, ref})
-        publish_replies(messages, %{state | dlg_state: dlg_state})
+        publish_replies(messages, %{state | driver_state: driver_state})
 
-      {:error, reason, messages, dlg_state} ->
+      {:error, reason, messages, driver_state} ->
         broadcast_from!(state, client_ref, {:error, reason, ref})
-        publish_replies(messages, %{state | dlg_state: dlg_state})
+        publish_replies(messages, %{state | driver_state: driver_state})
     end
   end
 
@@ -107,18 +107,18 @@ defmodule Phoenix.Transports.LongPoll.Server do
 
   def handle_info(msg, state) do
     msg
-    |> Phoenix.Channel.Driver.handle_info(state.dlg_state)
+    |> Phoenix.Channel.Driver.handle_info(state.driver_state)
     |> case do
-      {:stop, reason, dlg_state} ->
-        {:stop, reason, %{state | dlg_state: dlg_state}}
+      {:stop, reason, driver_state} ->
+        {:stop, reason, %{state | driver_state: driver_state}}
 
-      {:ok, messages, dlg_state} ->
-        publish_replies(messages, %{state | dlg_state: dlg_state})
+      {:ok, messages, driver_state} ->
+        publish_replies(messages, %{state | driver_state: driver_state})
     end
   end
 
   def terminate(reason, state) do
-    Phoenix.Channel.Driver.terminate(reason, state.dlg_state)
+    Phoenix.Channel.Driver.terminate(reason, state.driver_state)
   end
 
   defp broadcast_from!(state, client_ref, msg) when is_binary(client_ref),
