@@ -103,18 +103,9 @@ defmodule Phoenix.Socket.Transport do
   implementation.
   """
 
-  # TODO(sj): Do we need @protocol_version? And if yes, it doesn't belong here,
-  # because it's channels related.
-  @protocol_version "1.0.0"
-
   # TODO(sj): this behaviour should be moved elsewhere
   @doc """
   Provides a keyword list of default configuration for socket transports.
   """
   @callback default_config() :: Keyword.t
-
-  @doc """
-  Returns the Channel Transport protocol version.
-  """
-  def protocol_version, do: @protocol_version
 end

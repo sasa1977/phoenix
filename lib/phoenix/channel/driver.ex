@@ -9,6 +9,12 @@ defmodule Phoenix.Socket.Driver do
   alias Phoenix.Socket.Reply
 
   @client_vsn_requirements "~> 1.0"
+  @protocol_version "1.0.0"
+
+  @doc """
+  Returns the Channel Transport protocol version.
+  """
+  def protocol_version, do: @protocol_version
 
   @doc false
   def init(endpoint, handler, transport_name, transport, params) do
