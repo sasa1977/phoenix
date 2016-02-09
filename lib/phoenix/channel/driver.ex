@@ -86,6 +86,8 @@ defmodule Phoenix.Socket.Driver do
     for {pid, _} <- state.channels_inverse do
       Phoenix.Channel.Server.close(pid)
     end
+
+    :ok
   end
 
 
