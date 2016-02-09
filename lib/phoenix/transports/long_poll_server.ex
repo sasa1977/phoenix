@@ -21,9 +21,6 @@ defmodule Phoenix.Transports.LongPoll.Server do
   use GenServer
 
   alias Phoenix.PubSub
-  alias Phoenix.Socket.Transport
-  alias Phoenix.Socket.Broadcast
-  alias Phoenix.Socket.Message
 
   @doc """
   Starts the Server.
@@ -36,32 +33,26 @@ defmodule Phoenix.Transports.LongPoll.Server do
   and clients are responsible for opening a new session.
   """
   def start_link(endpoint, handler, transport_name, transport,
-                 serializer, params, window_ms, priv_topic) do
+                 params, window_ms, priv_topic) do
     GenServer.start_link(__MODULE__, [endpoint, handler, transport_name, transport,
-                                      serializer, params, window_ms, priv_topic])
+                                      params, window_ms, priv_topic])
   end
 
   ## Callbacks
 
   def init([endpoint, handler, transport_name, transport,
-            serializer, params, window_ms, priv_topic]) do
-    Process.flag(:trap_exit, true)
-
-    case Transport.connect(endpoint, handler, transport_name, transport, serializer, params) do
-      {:ok, socket} ->
+            params, window_ms, priv_topic]) do
+    case Phoenix.Channel.Driver.init(params, {endpoint, handler, transport_name, transport}) do
+      {:ok, dlg_state} ->
         state = %{buffer: [],
-                  socket: socket,
-                  channels: %{},
-                  channels_inverse: %{},
+                  dlg_state: dlg_state,
                   window_ms: trunc(window_ms * 1.5),
-                  pubsub_server: socket.endpoint.__pubsub_server__(),
                   priv_topic: priv_topic,
                   last_client_poll: now_ms(),
+                  endpoint: endpoint,
                   client_ref: nil}
 
-        if socket.id, do: PubSub.subscribe(state.pubsub_server, self, socket.id, link: true)
-        :ok = PubSub.subscribe(state.pubsub_server, self, priv_topic, link: true)
-
+        :ok = endpoint.subscribe(self, priv_topic, link: true)
         schedule_inactive_shutdown(state.window_ms)
 
         {:ok, state}
@@ -75,41 +66,18 @@ defmodule Phoenix.Transports.LongPoll.Server do
   # Handle client dispatches
   def handle_info({:dispatch, client_ref, msg, ref}, state) do
     msg
-    |> Transport.dispatch(state.channels, state.socket)
+    |> Phoenix.Channel.Driver.handle_in(state.dlg_state)
     |> case do
-      {:joined, channel_pid, reply_msg} ->
-        broadcast_from!(state, client_ref, {:dispatch, ref})
-        new_state = %{state | channels: Map.put(state.channels, msg.topic, channel_pid),
-                              channels_inverse: Map.put(state.channels_inverse, channel_pid, msg.topic)}
-        publish_reply(reply_msg, new_state)
+      {:stop, reason, dlg_state} ->
+        {:stop, reason, %{state | dlg_state: dlg_state}}
 
-      {:reply, reply_msg} ->
+      {:ok, messages, dlg_state} ->
         broadcast_from!(state, client_ref, {:dispatch, ref})
-        publish_reply(reply_msg, state)
+        publish_replies(messages, %{state | dlg_state: dlg_state})
 
-      :noreply ->
-        broadcast_from!(state, client_ref, {:dispatch, ref})
-        {:noreply, state}
-
-      {:error, reason, error_reply_msg} ->
+      {:error, reason, messages, dlg_state} ->
         broadcast_from!(state, client_ref, {:error, reason, ref})
-        publish_reply(error_reply_msg, state)
-    end
-  end
-
-  # Detects disconnect broadcasts and shuts down
-  def handle_info(%Broadcast{event: "disconnect"}, state) do
-    {:stop, {:shutdown, :disconnected}, state}
-  end
-
-  def handle_info({:EXIT, channel_pid, reason}, state) do
-    case Map.get(state.channels_inverse, channel_pid) do
-      nil ->
-        {:stop, {:shutdown, :pubsub_server_terminated}, state}
-      topic ->
-        new_state = %{state | channels: Map.delete(state.channels, topic),
-                              channels_inverse: Map.delete(state.channels_inverse, channel_pid)}
-        publish_reply(Transport.on_exit_message(topic, reason), new_state)
+        publish_replies(messages, %{state | dlg_state: dlg_state})
     end
   end
 
@@ -137,22 +105,28 @@ defmodule Phoenix.Transports.LongPoll.Server do
     end
   end
 
-  def handle_info(%Message{} = msg, state) do
-    publish_reply(msg, state)
+  def handle_info(msg, state) do
+    msg
+    |> Phoenix.Channel.Driver.handle_info(state.dlg_state)
+    |> case do
+      {:stop, reason, dlg_state} ->
+        {:stop, reason, %{state | dlg_state: dlg_state}}
+
+      {:ok, messages, dlg_state} ->
+        publish_replies(messages, %{state | dlg_state: dlg_state})
+    end
   end
 
-  def terminate(_reason, _state) do
-    :ok
+  def terminate(reason, state) do
+    Phoenix.Channel.Driver.terminate(reason, state.dlg_state)
   end
 
   defp broadcast_from!(state, client_ref, msg) when is_binary(client_ref),
-    do: PubSub.broadcast_from!(state.pubsub_server, self, client_ref, msg)
+    do: PubSub.broadcast_from!(state.endpoint.__pubsub_server__, self, client_ref, msg)
   defp broadcast_from!(_state, client_ref, msg) when is_pid(client_ref),
     do: send(client_ref, msg)
 
-  defp publish_reply(msg, state) do
-    msg = state.socket.serializer.encode!(msg)
-
+  defp publish_replies(messages, state) do
     case state.client_ref do
       {client_ref, ref} ->
         broadcast_from!(state, client_ref, {:now_available, ref})
@@ -160,7 +134,7 @@ defmodule Phoenix.Transports.LongPoll.Server do
         :ok
     end
 
-    {:noreply, %{state | buffer: [msg | state.buffer]}}
+    {:noreply, %{state | buffer: messages ++ state.buffer}}
   end
 
   defp time_to_ms({mega, sec, micro}),

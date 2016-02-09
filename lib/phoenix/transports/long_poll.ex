@@ -127,14 +127,12 @@ defmodule Phoenix.Transports.LongPoll do
   ## Connection helpers
 
   defp new_session(conn, endpoint, handler, transport, opts) do
-    serializer = opts[:serializer]
-
     priv_topic =
       "phx:lp:"
       <> Base.encode64(:crypto.strong_rand_bytes(16))
       <> (:os.timestamp() |> Tuple.to_list |> Enum.join(""))
 
-    args = [endpoint, handler, transport, __MODULE__, serializer,
+    args = [endpoint, handler, transport, __MODULE__,
             conn.params, opts[:window_ms], priv_topic]
 
     case Supervisor.start_child(LongPoll.Supervisor, args) do
