@@ -50,7 +50,6 @@ defmodule Phoenix.Transports.WebSocket do
 
   import Plug.Conn, only: [fetch_query_params: 1, send_resp: 3]
 
-  alias Phoenix.Socket.Broadcast
   alias Phoenix.Socket.Transport
 
   @doc false
@@ -67,12 +66,9 @@ defmodule Phoenix.Transports.WebSocket do
 
     case conn do
       %{halted: false} = conn ->
-        params     = conn.params
-        serializer = Keyword.fetch!(opts, :serializer)
-
-        case Transport.connect(endpoint, handler, transport, __MODULE__, serializer, params) do
-          {:ok, socket} ->
-            {:ok, conn, {__MODULE__, {socket, opts}}}
+        case Phoenix.Channel.Driver.init(conn.params, {endpoint, handler, transport, __MODULE__}) do
+          {:ok, dlg_state} ->
+            {:ok, conn, {__MODULE__, {dlg_state, opts}}}
           :error ->
             send_resp(conn, 403, "")
             {:error, conn}
@@ -88,88 +84,62 @@ defmodule Phoenix.Transports.WebSocket do
   end
 
   @doc false
-  def ws_init({socket, config}) do
-    Process.flag(:trap_exit, true)
-    serializer = Keyword.fetch!(config, :serializer)
-    timeout    = Keyword.fetch!(config, :timeout)
-
-    if socket.id, do: socket.endpoint.subscribe(self, socket.id, link: true)
-
-
-    {:ok, %{socket: socket,
-            channels: %{},
-            channels_inverse: %{},
-            serializer: serializer}, timeout}
+  def ws_init({dlg_state, opts}) do
+    {
+      :ok,
+      %{
+        dlg_state: dlg_state,
+        serializer: Keyword.fetch!(opts, :serializer)
+      },
+      Keyword.fetch!(opts, :timeout)
+    }
   end
 
   @doc false
   def ws_handle(opcode, payload, state) do
-    msg   = state.serializer.decode!(payload, opcode: opcode)
-
-    case Transport.dispatch(msg, state.channels, state.socket) do
-      :noreply ->
-        {:ok, state}
-      {:reply, reply_msg} ->
-        encode_reply(reply_msg, state)
-      {:joined, channel_pid, reply_msg} ->
-        encode_reply(reply_msg, put(state, msg.topic, channel_pid))
-      {:error, _reason, error_reply_msg} ->
-        encode_reply(error_reply_msg, state)
-    end
+    payload
+    |> state.serializer.decode!(opcode: opcode)
+    |> Phoenix.Channel.Driver.handle_in(state.dlg_state)
+    |> handle_dlg_response(state)
   end
 
   @doc false
-  def ws_info({:EXIT, channel_pid, reason}, state) do
-    case Map.get(state.channels_inverse, channel_pid) do
-      nil   -> {:ok, state}
-      topic ->
-        new_state = delete(state, topic, channel_pid)
-        encode_reply Transport.on_exit_message(topic, reason), new_state
-    end
+  def ws_info(message, state) do
+    message
+    |> Phoenix.Channel.Driver.handle_info(state.dlg_state)
+    |> handle_dlg_response(state)
   end
 
   @doc false
-  def ws_info(%Broadcast{event: "disconnect"}, state) do
-    {:shutdown, state}
-  end
-
-  def ws_info({:socket_push, _, _encoded_payload} = msg, state) do
-    format_reply(msg, state)
-  end
-
-  def ws_info(_, state) do
-    {:ok, state}
-  end
-
-  @doc false
-  def ws_terminate(_reason, _state) do
-    :ok
+  def ws_terminate(reason, state) do
+    Phoenix.Channel.Driver.terminate(reason, state.dlg_state)
   end
 
   @doc false
   def ws_close(state) do
-    for {pid, _} <- state.channels_inverse do
-      Phoenix.Channel.Server.close(pid)
-    end
+    Phoenix.Channel.Driver.close(state.dlg_state)
   end
 
-  defp put(state, topic, channel_pid) do
-    %{state | channels: Map.put(state.channels, topic, channel_pid),
-              channels_inverse: Map.put(state.channels_inverse, channel_pid, topic)}
+
+  defp handle_dlg_response({:stop, reason, dlg_state}, state) do
+    {:shutdown, reason, %{state | dlg_state: dlg_state}}
+  end
+  defp handle_dlg_response({:ok, messages, dlg_state}, state) do
+    {:ok, encode_out_messages(messages), %{state | dlg_state: dlg_state}}
+  end
+  defp handle_dlg_response({:error, _reason, messages, dlg_state}, state) do
+    # Error info is ignored, because there's no standard way to propagate it on websocket
+    {:ok, encode_out_messages(messages), %{state | dlg_state: dlg_state}}
   end
 
-  defp delete(state, topic, channel_pid) do
-    %{state | channels: Map.delete(state.channels, topic),
-              channels_inverse: Map.delete(state.channels_inverse, channel_pid)}
+
+  defp encode_out_messages(messages) do
+    Enum.map(
+      messages,
+      fn({:socket_push, encoding, encoded_payload}) -> {encoding, encoded_payload} end
+    )
   end
 
-  defp encode_reply(reply, state) do
-    format_reply(state.serializer.encode!(reply), state)
-  end
-
-  defp format_reply({:socket_push, encoding, encoded_payload}, state) do
-    {:reply, {encoding, encoded_payload}, state}
-  end
 
   defp code_reload(conn, opts, endpoint) do
     reload? = Keyword.get(opts, :code_reloader, endpoint.config(:code_reloader))
