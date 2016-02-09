@@ -1,4 +1,6 @@
 defmodule Phoenix.Socket.Transport do
+  # TODO(sj): this doc needs to be revisited. Some of the stuff must be moved elsewhere, some
+  #           should be removed.
   @moduledoc """
   API for building transports.
 
@@ -102,12 +104,8 @@ defmodule Phoenix.Socket.Transport do
   """
 
   require Logger
-  alias Phoenix.Socket
-  alias Phoenix.Socket.Message
-  alias Phoenix.Socket.Reply
 
   @protocol_version "1.0.0"
-  @client_vsn_requirements "~> 1.0"
 
   @doc """
   Provides a keyword list of default configuration for socket transports.
@@ -118,138 +116,6 @@ defmodule Phoenix.Socket.Transport do
   Returns the Channel Transport protocol version.
   """
   def protocol_version, do: @protocol_version
-
-  @doc """
-  Handles the socket connection.
-
-  It builds a new `Phoenix.Socket` and invokes the handler
-  `connect/2` callback and returns the result.
-
-  If the connection was successful, generates `Phoenix.PubSub`
-  topic from the `id/1` callback.
-  """
-  def connect(endpoint, handler, transport_name, transport, serializer, params) do
-    vsn = params["vsn"] || "1.0.0"
-
-    if Version.match?(vsn, @client_vsn_requirements) do
-      connect_vsn(endpoint, handler, transport_name, transport, serializer, params)
-    else
-      Logger.error "The client's requested channel transport version \"#{vsn}\" " <>
-                   "does not match server's version requirements of \"#{@client_vsn_requirements}\""
-      :error
-    end
-  end
-  defp connect_vsn(endpoint, handler, transport_name, transport, serializer, params) do
-    socket = %Socket{endpoint: endpoint,
-                     transport: transport,
-                     transport_pid: self(),
-                     transport_name: transport_name,
-                     handler: handler,
-                     pubsub_server: endpoint.__pubsub_server__,
-                     serializer: serializer}
-
-    case handler.connect(params, socket) do
-      {:ok, socket} ->
-        case handler.id(socket) do
-          nil                   -> {:ok, socket}
-          id when is_binary(id) -> {:ok, %Socket{socket | id: id}}
-          invalid               ->
-            Logger.error "#{inspect handler}.id/1 returned invalid identifier #{inspect invalid}. " <>
-                         "Expected nil or a string."
-            :error
-        end
-
-      :error ->
-        :error
-
-      invalid ->
-        Logger.error "#{inspect handler}.connect/2 returned invalid value #{inspect invalid}. " <>
-                     "Expected {:ok, socket} or :error"
-        :error
-    end
-  end
-
-  @doc """
-  Dispatches `Phoenix.Socket.Message` to a channel.
-
-  All serialized, remote client messages should be deserialized and
-  forwarded through this function by adapters.
-
-  The following returns must be handled by transports:
-
-    * `:noreply` - Nothing to be done by the transport
-    * `{:reply, reply}` - The reply to be sent to the client
-    * `{:joined, channel_pid, reply}` - The channel was joined
-      and the reply must be sent as result
-    * `{:error, reason, reply}` - An error happened and the reply
-      must be sent as result
-
-  """
-  def dispatch(msg, channels, socket)
-
-  def dispatch(%{ref: ref, topic: "phoenix", event: "heartbeat"}, _channels, _socket) do
-    {:reply, %Reply{ref: ref, topic: "phoenix", status: :ok, payload: %{}}}
-  end
-
-  def dispatch(%Message{} = msg, channels, socket) do
-    channels
-    |> Map.get(msg.topic)
-    |> do_dispatch(msg, socket)
-  end
-
-  defp do_dispatch(nil, %{event: "phx_join", topic: topic} = msg, socket) do
-    if channel = socket.handler.__channel__(topic, socket.transport_name) do
-      socket = %Socket{socket | topic: topic, channel: channel}
-
-      log_info topic, fn ->
-        "JOIN #{topic} to #{inspect(channel)}\n" <>
-        "  Transport:  #{inspect socket.transport}\n" <>
-        "  Parameters: #{inspect msg.payload}"
-      end
-
-      case Phoenix.Channel.Server.join(socket, msg.payload) do
-        {:ok, response, pid} ->
-          log_info topic, fn -> "Replied #{topic} :ok" end
-          {:joined, pid, %Reply{ref: msg.ref, topic: topic, status: :ok, payload: response}}
-
-        {:error, reason} ->
-          log_info topic, fn -> "Replied #{topic} :error" end
-          {:error, reason, %Reply{ref: msg.ref, topic: topic, status: :error, payload: reason}}
-      end
-    else
-      reply_ignore(msg, socket)
-    end
-  end
-
-  defp do_dispatch(nil, msg, socket) do
-    reply_ignore(msg, socket)
-  end
-
-  defp do_dispatch(channel_pid, msg, _socket) do
-    send(channel_pid, msg)
-    :noreply
-  end
-
-  defp log_info("phoenix" <> _, _func), do: :noop
-  defp log_info(_topic, func), do: Logger.info(func)
-
-  defp reply_ignore(msg, socket) do
-    Logger.debug fn -> "Ignoring unmatched topic \"#{msg.topic}\" in #{inspect(socket.handler)}" end
-    {:error, :unmatched_topic, %Reply{ref: msg.ref, topic: msg.topic, status: :error,
-                                      payload: %{reason: "unmatched topic"}}}
-  end
-
-  @doc """
-  Returns the message to be relayed when a channel exists.
-  """
-  def on_exit_message(topic, reason) do
-    case reason do
-      :normal        -> %Message{topic: topic, event: "phx_close", payload: %{}}
-      :shutdown      -> %Message{topic: topic, event: "phx_close", payload: %{}}
-      {:shutdown, _} -> %Message{topic: topic, event: "phx_close", payload: %{}}
-      _              -> %Message{topic: topic, event: "phx_error", payload: %{}}
-    end
-  end
 
   @doc """
   Forces SSL in the socket connection.

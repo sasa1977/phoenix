@@ -1,15 +1,20 @@
 defmodule Phoenix.Channel.Driver do
   @behaviour Phoenix.Socket.Dialogue
 
+  require Logger
+  alias Phoenix.Socket
   alias Phoenix.Socket.Broadcast
-  alias Phoenix.Socket.Transport
+  alias Phoenix.Socket.Message
+  alias Phoenix.Socket.Reply
+
+  @client_vsn_requirements "~> 1.0"
 
   @doc false
   def init(endpoint, handler, transport_name, transport, params) do
     {_, opts} = handler.__transport__(transport_name)
     serializer = Keyword.fetch!(opts, :serializer)
 
-    case Transport.connect(endpoint, handler, transport_name, transport, serializer, params) do
+    case connect(endpoint, handler, transport_name, transport, serializer, params) do
       :error -> :error
 
       {:ok, socket} ->
@@ -29,7 +34,7 @@ defmodule Phoenix.Channel.Driver do
 
   @doc false
   def handle_in(message, state) do
-    case Transport.dispatch(message, state.channels, state.socket) do
+    case dispatch(message, state.channels, state.socket) do
       :noreply ->
         {:ok, [], state}
       {:reply, reply_msg} ->
@@ -51,7 +56,7 @@ defmodule Phoenix.Channel.Driver do
         {:stop, {:shutdown, :pubsub_server_terminated}, state}
       topic ->
         new_state = delete_channel(state, topic, channel_pid)
-        encode_reply(Transport.on_exit_message(topic, reason), new_state)
+        encode_reply(on_exit_message(topic, reason), new_state)
     end
   end
 
@@ -89,5 +94,108 @@ defmodule Phoenix.Channel.Driver do
   defp delete_channel(state, topic, channel_pid) do
     %{state | channels: Map.delete(state.channels, topic),
               channels_inverse: Map.delete(state.channels_inverse, channel_pid)}
+  end
+
+  @doc false
+  def connect(endpoint, handler, transport_name, transport, serializer, params) do
+    vsn = params["vsn"] || "1.0.0"
+
+    if Version.match?(vsn, @client_vsn_requirements) do
+      connect_vsn(endpoint, handler, transport_name, transport, serializer, params)
+    else
+      Logger.error "The client's requested channel transport version \"#{vsn}\" " <>
+                   "does not match server's version requirements of \"#{@client_vsn_requirements}\""
+      :error
+    end
+  end
+  defp connect_vsn(endpoint, handler, transport_name, transport, serializer, params) do
+    socket = %Socket{endpoint: endpoint,
+                     transport: transport,
+                     transport_pid: self(),
+                     transport_name: transport_name,
+                     handler: handler,
+                     pubsub_server: endpoint.__pubsub_server__,
+                     serializer: serializer}
+
+    case handler.connect(params, socket) do
+      {:ok, socket} ->
+        case handler.id(socket) do
+          nil                   -> {:ok, socket}
+          id when is_binary(id) -> {:ok, %Socket{socket | id: id}}
+          invalid               ->
+            Logger.error "#{inspect handler}.id/1 returned invalid identifier #{inspect invalid}. " <>
+                         "Expected nil or a string."
+            :error
+        end
+
+      :error ->
+        :error
+
+      invalid ->
+        Logger.error "#{inspect handler}.connect/2 returned invalid value #{inspect invalid}. " <>
+                     "Expected {:ok, socket} or :error"
+        :error
+    end
+  end
+
+  defp dispatch(%{ref: ref, topic: "phoenix", event: "heartbeat"}, _channels, _socket) do
+    {:reply, %Reply{ref: ref, topic: "phoenix", status: :ok, payload: %{}}}
+  end
+
+  defp dispatch(%Message{} = msg, channels, socket) do
+    channels
+    |> Map.get(msg.topic)
+    |> do_dispatch(msg, socket)
+  end
+
+  defp do_dispatch(nil, %{event: "phx_join", topic: topic} = msg, socket) do
+    if channel = socket.handler.__channel__(topic, socket.transport_name) do
+      socket = %Socket{socket | topic: topic, channel: channel}
+
+      log_info topic, fn ->
+        "JOIN #{topic} to #{inspect(channel)}\n" <>
+        "  Transport:  #{inspect socket.transport}\n" <>
+        "  Parameters: #{inspect msg.payload}"
+      end
+
+      case Phoenix.Channel.Server.join(socket, msg.payload) do
+        {:ok, response, pid} ->
+          log_info topic, fn -> "Replied #{topic} :ok" end
+          {:joined, pid, %Reply{ref: msg.ref, topic: topic, status: :ok, payload: response}}
+
+        {:error, reason} ->
+          log_info topic, fn -> "Replied #{topic} :error" end
+          {:error, reason, %Reply{ref: msg.ref, topic: topic, status: :error, payload: reason}}
+      end
+    else
+      reply_ignore(msg, socket)
+    end
+  end
+
+  defp do_dispatch(nil, msg, socket) do
+    reply_ignore(msg, socket)
+  end
+
+  defp do_dispatch(channel_pid, msg, _socket) do
+    send(channel_pid, msg)
+    :noreply
+  end
+
+  defp log_info("phoenix" <> _, _func), do: :noop
+  defp log_info(_topic, func), do: Logger.info(func)
+
+  defp reply_ignore(msg, socket) do
+    Logger.debug fn -> "Ignoring unmatched topic \"#{msg.topic}\" in #{inspect(socket.handler)}" end
+    {:error, :unmatched_topic, %Reply{ref: msg.ref, topic: msg.topic, status: :error,
+                                      payload: %{reason: "unmatched topic"}}}
+  end
+
+  def on_exit_message(topic, reason) do
+    case reason do
+      :normal        -> %Message{topic: topic, event: "phx_close", payload: %{}}
+      :shutdown      -> %Message{topic: topic, event: "phx_close", payload: %{}}
+      {:shutdown, _} -> %Message{topic: topic, event: "phx_close", payload: %{}}
+      _              -> %Message{topic: topic, event: "phx_error", payload: %{}}
+    end
   end
 end

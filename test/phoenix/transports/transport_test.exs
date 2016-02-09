@@ -23,19 +23,6 @@ defmodule Phoenix.Transports.TransportTest do
     Logger.disable(self())
   end
 
-  ## on_exit_message
-
-  test "on_exit_message/2" do
-    assert Transport.on_exit_message("foo", :normal) ==
-           %Message{event: "phx_close", payload: %{}, topic: "foo"}
-    assert Transport.on_exit_message("foo", :shutdown) ==
-           %Message{event: "phx_close", payload: %{}, topic: "foo"}
-    assert Transport.on_exit_message("foo", {:shutdown, :whatever}) ==
-           %Message{event: "phx_close", payload: %{}, topic: "foo"}
-    assert Transport.on_exit_message("foo", :oops) ==
-           %Message{event: "phx_error", payload: %{}, topic: "foo"}
-  end
-
   ## Check origin
 
   defp check_origin(origin, opts) do

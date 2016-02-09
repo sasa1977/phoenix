@@ -155,7 +155,7 @@ defmodule Phoenix.ChannelTest do
   alias Phoenix.Socket.Message
   alias Phoenix.Socket.Broadcast
   alias Phoenix.Socket.Reply
-  alias Phoenix.Socket.Transport
+  alias Phoenix.Channel.Driver
   alias Phoenix.Channel.Server
 
   defmodule NoopSerializer do
@@ -240,7 +240,7 @@ defmodule Phoenix.ChannelTest do
   defmacro connect(handler, params) do
     if endpoint = Module.get_attribute(__CALLER__.module, :endpoint) do
       quote do
-        Transport.connect(unquote(endpoint), unquote(handler), :channel_test,
+        Driver.connect(unquote(endpoint), unquote(handler), :channel_test,
                           unquote(__MODULE__), NoopSerializer, unquote(params))
       end
     else
