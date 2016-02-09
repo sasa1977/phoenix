@@ -62,13 +62,13 @@ defmodule Phoenix.Transports.LongPoll do
   end
 
   @doc false
-  def call(conn, {endpoint, handler, transport}) do
-    {_, opts} = handler.__transport__(transport)
+  def call(conn, {endpoint, socket_handler, transport}) do
+    {_, opts} = socket_handler.__transport__(transport)
 
     conn
-    |> Transports.Utils.init_plug_conn(endpoint, handler, transport, &status_json(&1, %{}))
+    |> Transports.Utils.init_plug_conn(endpoint, socket_handler, transport, &status_json(&1, %{}))
     |> put_resp_header("access-control-allow-origin", "*")
-    |> dispatch(endpoint, handler, transport, opts)
+    |> dispatch(endpoint, socket_handler, transport, opts)
   end
 
   defp dispatch(%{halted: true} = conn, _, _, _, _) do
@@ -88,12 +88,12 @@ defmodule Phoenix.Transports.LongPoll do
   end
 
   # Starts a new session or listen to a message if one already exists.
-  defp dispatch(%{method: "GET"} = conn, endpoint, handler, transport, opts) do
+  defp dispatch(%{method: "GET"} = conn, endpoint, socket_handler, transport, opts) do
     case resume_session(conn.params, endpoint, opts) do
       {:ok, server_ref} ->
         listen(conn, server_ref, endpoint, opts)
       :error ->
-        new_session(conn, endpoint, handler, transport, opts)
+        new_session(conn, endpoint, socket_handler, transport, opts)
     end
   end
 
@@ -121,13 +121,13 @@ defmodule Phoenix.Transports.LongPoll do
 
   ## Connection helpers
 
-  defp new_session(conn, endpoint, handler, transport, opts) do
+  defp new_session(conn, endpoint, socket_handler, transport, opts) do
     priv_topic =
       "phx:lp:"
       <> Base.encode64(:crypto.strong_rand_bytes(16))
       <> (:os.timestamp() |> Tuple.to_list |> Enum.join(""))
 
-    args = [endpoint, handler, transport, __MODULE__,
+    args = [endpoint, socket_handler, transport, __MODULE__,
             conn.params, opts[:window_ms], priv_topic]
 
     case Supervisor.start_child(LongPoll.Supervisor, args) do

@@ -1,7 +1,7 @@
 # TODO(sj): rename and move the file to the proper place
 defmodule Phoenix.Transports.Driver do
   # TODO(sj): consider bundling these args into a struct
-  @callback init(endpoint :: atom, handler :: atom, transport_name :: atom, transport :: atom, params :: any) ::
+  @callback init(endpoint :: atom, socket_handler :: atom, transport_name :: atom, transport :: atom, params :: any) ::
     {:ok, initial_state :: any} | :error
 
   @callback handle_in(message :: any, driver_state :: any) ::

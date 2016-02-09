@@ -51,14 +51,14 @@ defmodule Phoenix.Transports.WebSocket do
   import Plug.Conn, only: [fetch_query_params: 1, send_resp: 3]
 
   @doc false
-  def init(%Plug.Conn{method: "GET"} = conn, {endpoint, handler, transport}) do
-    {_, opts} = handler.__transport__(transport)
+  def init(%Plug.Conn{method: "GET"} = conn, {endpoint, socket_handler, transport}) do
+    {_, opts} = socket_handler.__transport__(transport)
 
     conn
-    |> Phoenix.Transports.Utils.init_plug_conn(endpoint, handler, transport)
+    |> Phoenix.Transports.Utils.init_plug_conn(endpoint, socket_handler, transport)
     |> case do
       %{halted: false} = conn ->
-        case Phoenix.Socket.Driver.init(endpoint, handler, transport, __MODULE__, conn.params) do
+        case Phoenix.Socket.Driver.init(endpoint, socket_handler, transport, __MODULE__, conn.params) do
           {:ok, driver_state} ->
             {:ok, conn, {__MODULE__, {driver_state, opts}}}
           :error ->

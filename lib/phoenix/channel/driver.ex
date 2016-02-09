@@ -17,11 +17,11 @@ defmodule Phoenix.Socket.Driver do
   def protocol_version, do: @protocol_version
 
   @doc false
-  def init(endpoint, handler, transport_name, transport, params) do
-    {_, opts} = handler.__transport__(transport_name)
+  def init(endpoint, socket_handler, transport_name, transport, params) do
+    {_, opts} = socket_handler.__transport__(transport_name)
     serializer = Keyword.fetch!(opts, :serializer)
 
-    case connect(endpoint, handler, transport_name, transport, serializer, params) do
+    case connect(endpoint, socket_handler, transport_name, transport, serializer, params) do
       :error -> :error
 
       {:ok, socket} ->
@@ -104,33 +104,33 @@ defmodule Phoenix.Socket.Driver do
   end
 
   @doc false
-  def connect(endpoint, handler, transport_name, transport, serializer, params) do
+  def connect(endpoint, socket_handler, transport_name, transport, serializer, params) do
     vsn = params["vsn"] || "1.0.0"
 
     if Version.match?(vsn, @client_vsn_requirements) do
-      connect_vsn(endpoint, handler, transport_name, transport, serializer, params)
+      connect_vsn(endpoint, socket_handler, transport_name, transport, serializer, params)
     else
       Logger.error "The client's requested channel transport version \"#{vsn}\" " <>
                    "does not match server's version requirements of \"#{@client_vsn_requirements}\""
       :error
     end
   end
-  defp connect_vsn(endpoint, handler, transport_name, transport, serializer, params) do
+  defp connect_vsn(endpoint, socket_handler, transport_name, transport, serializer, params) do
     socket = %Socket{endpoint: endpoint,
                      transport: transport,
                      transport_pid: self(),
                      transport_name: transport_name,
-                     handler: handler,
+                     handler: socket_handler,
                      pubsub_server: endpoint.__pubsub_server__,
                      serializer: serializer}
 
-    case handler.connect(params, socket) do
+    case socket_handler.connect(params, socket) do
       {:ok, socket} ->
-        case handler.id(socket) do
+        case socket_handler.id(socket) do
           nil                   -> {:ok, socket}
           id when is_binary(id) -> {:ok, %Socket{socket | id: id}}
           invalid               ->
-            Logger.error "#{inspect handler}.id/1 returned invalid identifier #{inspect invalid}. " <>
+            Logger.error "#{inspect socket_handler}.id/1 returned invalid identifier #{inspect invalid}. " <>
                          "Expected nil or a string."
             :error
         end
@@ -139,7 +139,7 @@ defmodule Phoenix.Socket.Driver do
         :error
 
       invalid ->
-        Logger.error "#{inspect handler}.connect/2 returned invalid value #{inspect invalid}. " <>
+        Logger.error "#{inspect socket_handler}.connect/2 returned invalid value #{inspect invalid}. " <>
                      "Expected {:ok, socket} or :error"
         :error
     end

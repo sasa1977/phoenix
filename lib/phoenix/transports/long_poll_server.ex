@@ -32,17 +32,17 @@ defmodule Phoenix.Transports.LongPoll.Server do
   If the server receives no message within `window_ms`, it terminates
   and clients are responsible for opening a new session.
   """
-  def start_link(endpoint, handler, transport_name, transport,
+  def start_link(endpoint, socket_handler, transport_name, transport,
                  params, window_ms, priv_topic) do
-    GenServer.start_link(__MODULE__, [endpoint, handler, transport_name, transport,
+    GenServer.start_link(__MODULE__, [endpoint, socket_handler, transport_name, transport,
                                       params, window_ms, priv_topic])
   end
 
   ## Callbacks
 
-  def init([endpoint, handler, transport_name, transport,
+  def init([endpoint, socket_handler, transport_name, transport,
             params, window_ms, priv_topic]) do
-    case Phoenix.Socket.Driver.init(endpoint, handler, transport_name, transport, params) do
+    case Phoenix.Socket.Driver.init(endpoint, socket_handler, transport_name, transport, params) do
       {:ok, driver_state} ->
         state = %{buffer: [],
                   driver_state: driver_state,
