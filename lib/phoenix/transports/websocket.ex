@@ -50,21 +50,13 @@ defmodule Phoenix.Transports.WebSocket do
 
   import Plug.Conn, only: [fetch_query_params: 1, send_resp: 3]
 
-  alias Phoenix.Socket.Transport
-
   @doc false
   def init(%Plug.Conn{method: "GET"} = conn, {endpoint, handler, transport}) do
     {_, opts} = handler.__transport__(transport)
 
-    conn =
-      conn
-      |> code_reload(opts, endpoint)
-      |> Plug.Conn.fetch_query_params
-      |> Transport.transport_log(opts[:transport_log])
-      |> Transport.force_ssl(handler, endpoint, opts)
-      |> Transport.check_origin(handler, endpoint, opts)
-
-    case conn do
+    conn
+    |> Phoenix.Transports.Utils.init_plug_conn(endpoint, handler, transport)
+    |> case do
       %{halted: false} = conn ->
         case Phoenix.Channel.Driver.init(endpoint, handler, transport, __MODULE__, conn.params) do
           {:ok, dlg_state} ->
@@ -130,13 +122,5 @@ defmodule Phoenix.Transports.WebSocket do
   defp handle_dlg_response({:error, _reason, messages, dlg_state}, state) do
     # Error info is ignored, because there's no standard way to propagate it on websocket
     {:ok, messages, %{state | dlg_state: dlg_state}}
-  end
-
-
-  defp code_reload(conn, opts, endpoint) do
-    reload? = Keyword.get(opts, :code_reloader, endpoint.config(:code_reloader))
-    if reload?, do: Phoenix.CodeReloader.reload!(endpoint)
-
-    conn
   end
 end

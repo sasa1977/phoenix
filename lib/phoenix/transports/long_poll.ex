@@ -54,7 +54,7 @@ defmodule Phoenix.Transports.LongPoll do
 
   alias Phoenix.Socket.Message
   alias Phoenix.Transports.LongPoll
-  alias Phoenix.Socket.Transport
+  alias Phoenix.Transports
 
   @doc false
   def init(opts) do
@@ -66,13 +66,8 @@ defmodule Phoenix.Transports.LongPoll do
     {_, opts} = handler.__transport__(transport)
 
     conn
-    |> code_reload(opts, endpoint)
-    |> fetch_query_params
+    |> Transports.Utils.init_plug_conn(endpoint, handler, transport, &status_json(&1, %{}))
     |> put_resp_header("access-control-allow-origin", "*")
-    |> Plug.Conn.fetch_query_params
-    |> Transport.transport_log(opts[:transport_log])
-    |> Transport.force_ssl(handler, endpoint, opts)
-    |> Transport.check_origin(handler, endpoint, opts, &status_json(&1, %{}))
     |> dispatch(endpoint, handler, transport, opts)
   end
 
@@ -254,12 +249,5 @@ defmodule Phoenix.Transports.LongPoll do
     conn
     |> put_status(200)
     |> Phoenix.Controller.json(data)
-  end
-
-  defp code_reload(conn, opts, endpoint) do
-    reload? = Keyword.get(opts, :code_reloader, endpoint.config(:code_reloader))
-    if reload?, do: Phoenix.CodeReloader.reload!(endpoint)
-
-    conn
   end
 end
