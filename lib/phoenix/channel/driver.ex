@@ -36,7 +36,6 @@ defmodule Phoenix.Socket.Driver do
   @doc """
   Returns the Channel Transport protocol version.
   """
-  # TODO(sj): do we really need to expose this? It seems to be used only in tests.
   def protocol_version, do: @protocol_version
 
   @doc false
