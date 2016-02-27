@@ -21,25 +21,9 @@ defmodule Phoenix.Transports.Utils do
   require Logger
 
   @doc """
-  Initializes the `Plug` connection which is used by a socket transport.
-
-  - reloads the code if needed
-  - logs the transport request
-  - forces SSL in the socket connection
-  - checks the origin request header against the list of allowed origins
+  Invokes the code reloader if it is configured in the endpoint.
   """
-  def init_plug_conn(conn, endpoint, handler, transport, response_sender \\ &Plug.Conn.send_resp/1) do
-    {_, opts} = handler.__transport__(transport)
-
-    conn
-    |> code_reload(opts, endpoint)
-    |> Plug.Conn.fetch_query_params
-    |> transport_log(opts[:transport_log])
-    |> force_ssl(handler, endpoint, opts)
-    |> check_origin(handler, endpoint, opts, response_sender)
-  end
-
-  defp code_reload(conn, opts, endpoint) do
+  def code_reload(conn, opts, endpoint) do
     reload? = Keyword.get(opts, :code_reloader, endpoint.config(:code_reloader))
     if reload?, do: Phoenix.CodeReloader.reload!(endpoint)
 

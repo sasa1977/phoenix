@@ -52,10 +52,16 @@ defmodule Phoenix.Transports.WebSocket do
 
   @doc false
   def init(%Plug.Conn{method: "GET"} = conn, {endpoint, socket_handler, transport}) do
+    alias Phoenix.Transports
+
     {_, opts} = socket_handler.__transport__(transport)
 
     conn
-    |> Phoenix.Transports.Utils.init_plug_conn(endpoint, socket_handler, transport)
+    |> Transports.Utils.code_reload(opts, endpoint)
+    |> fetch_query_params
+    |> Transports.Utils.transport_log(opts[:transport_log])
+    |> Transports.Utils.force_ssl(socket_handler, endpoint, opts)
+    |> Transports.Utils.check_origin(socket_handler, endpoint, opts)
     |> case do
       %{halted: false} = conn ->
         case Phoenix.Socket.Driver.init(endpoint, socket_handler, transport, __MODULE__, conn.params) do

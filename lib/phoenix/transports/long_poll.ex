@@ -54,7 +54,6 @@ defmodule Phoenix.Transports.LongPoll do
 
   alias Phoenix.Socket.Message
   alias Phoenix.Transports.LongPoll
-  alias Phoenix.Transports
 
   @doc false
   def init(opts) do
@@ -63,10 +62,16 @@ defmodule Phoenix.Transports.LongPoll do
 
   @doc false
   def call(conn, {endpoint, socket_handler, transport}) do
+    alias Phoenix.Transports
+
     {_, opts} = socket_handler.__transport__(transport)
 
     conn
-    |> Transports.Utils.init_plug_conn(endpoint, socket_handler, transport, &status_json(&1, %{}))
+    |> Transports.Utils.code_reload(opts, endpoint)
+    |> fetch_query_params
+    |> Transports.Utils.transport_log(opts[:transport_log])
+    |> Transports.Utils.force_ssl(socket_handler, endpoint, opts)
+    |> Transports.Utils.check_origin(socket_handler, endpoint, opts, &status_json(&1, %{}))
     |> put_resp_header("access-control-allow-origin", "*")
     |> dispatch(endpoint, socket_handler, transport, opts)
   end
