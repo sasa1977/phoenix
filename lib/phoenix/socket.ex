@@ -162,16 +162,7 @@ defmodule Phoenix.Socket do
 
   defmacro __before_compile__(env) do
     transports = Module.get_attribute(env.module, :phoenix_transports)
-    channels   = Module.get_attribute(env.module, :phoenix_channels)
-
-    transport_defs =
-      for {name, {mod, conf}} <- transports do
-        quote do
-          def __transport__(unquote(name)) do
-            {unquote(mod), unquote(conf)}
-          end
-        end
-      end
+    channels = Module.get_attribute(env.module, :phoenix_channels)
 
     channel_defs =
       for {topic_pattern, module, opts} <- channels do
@@ -182,7 +173,6 @@ defmodule Phoenix.Socket do
 
     quote do
       def __transports__, do: unquote(Macro.escape(transports))
-      unquote(transport_defs)
       unquote(channel_defs)
       def __channel__(_topic, _transport), do: nil
     end
@@ -290,13 +280,13 @@ defmodule Phoenix.Socket do
   """
   defmacro transport(name, module, config \\ []) do
     quote do
-      @phoenix_transports Phoenix.Socket.__transport__(
+      @phoenix_transports Phoenix.Socket.merge_transport_spec(
         @phoenix_transports, unquote(name), unquote(module), unquote(config))
     end
   end
 
   @doc false
-  def __transport__(transports, name, module, config) do
+  def merge_transport_spec(transports, name, module, config) do
     config = Keyword.merge(module.default_config() , config)
 
     Map.update(transports, name, {module, config}, fn {dup_module, _} ->

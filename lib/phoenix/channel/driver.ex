@@ -39,11 +39,34 @@ defmodule Phoenix.Socket.Driver do
   def protocol_version, do: @protocol_version
 
   @doc false
-  def init(endpoint, socket_handler, transport_name, transport, params) do
-    {_, opts} = socket_handler.__transport__(transport_name)
-    serializer = Keyword.fetch!(opts, :serializer)
+  def transports(endpoint, driver_opts) do
+    alias Phoenix.Transports
 
-    case connect(endpoint, socket_handler, transport_name, transport, serializer, params) do
+    socket_handler = Keyword.fetch!(driver_opts, :socket_handler)
+    path = Keyword.fetch!(driver_opts, :path)
+
+    for {transport_name, {transport, transport_opts}} <- socket_handler.__transports__ do
+      {
+        Path.join(path, Atom.to_string(transport_name)),
+        %Transports.Driver.Config{
+          driver_opts: driver_opts,
+          transport: transport,
+          transport_name: transport_name,
+          transport_opts:
+            transport_opts
+            |> Transports.Utils.force_ssl_config(endpoint)
+            |> Transports.Utils.check_origin_config(endpoint)
+        }
+      }
+    end
+  end
+
+  @doc false
+  def init(endpoint, config, params) do
+    socket_handler = Keyword.fetch!(config.driver_opts, :socket_handler)
+    serializer = Keyword.fetch!(config.transport_opts, :serializer)
+
+    case connect(endpoint, socket_handler, config.transport_name, config.transport, serializer, params) do
       :error -> :error
 
       {:ok, socket} ->

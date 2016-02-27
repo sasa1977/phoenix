@@ -60,13 +60,11 @@ defmodule Phoenix.Endpoint.CowboyHandler do
   """
   def child_spec(scheme, endpoint, config) do
     dispatches =
-      for {path, socket} <- endpoint.__sockets__,
-          {transport, {module, config}} <- socket.__transports__,
+      for {driver, driver_opts} <- endpoint.__drivers__,
+          {path, config} <- driver.transports(endpoint, driver_opts),
           # Allow handlers to be configured at the transport level
-          handler = config[:cowboy] || default_for(module),
-          do: {Path.join(path, Atom.to_string(transport)),
-               handler,
-               {module, {endpoint, socket, transport}}}
+          handler = config.transport_opts[:cowboy] || default_for(config.transport),
+          do: {path, handler, {config.transport, {endpoint, driver, config}}}
 
     dispatches =
       dispatches ++ [{:_, Plug.Adapters.Cowboy.Handler, {endpoint, []}}]

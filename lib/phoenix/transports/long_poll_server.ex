@@ -22,31 +22,19 @@ defmodule Phoenix.Transports.LongPoll.Server do
 
   alias Phoenix.PubSub
 
-  @doc """
-  Starts the Server.
-
-    * `socket` - The `Phoenix.Socket` struct returend from `connect/2`
-      of the socket handler.
-    * `window_ms` - The longpoll session timeout, in milliseconds
-
-  If the server receives no message within `window_ms`, it terminates
-  and clients are responsible for opening a new session.
-  """
-  def start_link(endpoint, socket_handler, transport_name, transport,
-                 params, window_ms, priv_topic) do
-    GenServer.start_link(__MODULE__, [endpoint, socket_handler, transport_name, transport,
-                                      params, window_ms, priv_topic])
+  def start_link(endpoint, driver, config, params, priv_topic) do
+    GenServer.start_link(__MODULE__, [endpoint, driver, config, params, priv_topic])
   end
 
   ## Callbacks
 
-  def init([endpoint, socket_handler, transport_name, transport,
-            params, window_ms, priv_topic]) do
-    case Phoenix.Socket.Driver.init(endpoint, socket_handler, transport_name, transport, params) do
+  def init([endpoint, driver, config, params, priv_topic]) do
+    case driver.init(endpoint, config, params) do
       {:ok, driver_state} ->
         state = %{buffer: [],
+                  driver: driver,
                   driver_state: driver_state,
-                  window_ms: trunc(window_ms * 1.5),
+                  window_ms: trunc(config.transport_opts[:window_ms] * 1.5),
                   priv_topic: priv_topic,
                   last_client_poll: now_ms(),
                   endpoint: endpoint,
@@ -66,7 +54,7 @@ defmodule Phoenix.Transports.LongPoll.Server do
   # Handle client dispatches
   def handle_info({:dispatch, client_ref, msg, ref}, state) do
     msg
-    |> Phoenix.Socket.Driver.handle_in(state.driver_state)
+    |> state.driver.handle_in(state.driver_state)
     |> case do
       {:stop, reason, driver_state} ->
         {:stop, reason, %{state | driver_state: driver_state}}
@@ -107,7 +95,7 @@ defmodule Phoenix.Transports.LongPoll.Server do
 
   def handle_info(msg, state) do
     msg
-    |> Phoenix.Socket.Driver.handle_info(state.driver_state)
+    |> state.driver.handle_info(state.driver_state)
     |> case do
       {:stop, reason, driver_state} ->
         {:stop, reason, %{state | driver_state: driver_state}}
@@ -117,7 +105,7 @@ defmodule Phoenix.Transports.LongPoll.Server do
     end
   end
 
-  def terminate(:normal, state), do: Phoenix.Socket.Driver.close(state.driver_state)
+  def terminate(:normal, state), do: state.driver.close(state.driver_state)
   def terminate(_reason, _state) do
     :ok
   end

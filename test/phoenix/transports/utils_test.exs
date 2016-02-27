@@ -26,7 +26,7 @@ defmodule Phoenix.Transports.UtilsTest do
 
   defp check_origin(origin, opts) do
     conn = conn(:get, "/") |> put_req_header("origin", origin)
-    Utils.check_origin(conn, make_ref(), Endpoint, opts)
+    Utils.check_origin(conn, Endpoint, Utils.check_origin_config(opts, Endpoint))
   end
 
   test "does not check origin if disabled" do
@@ -118,21 +118,20 @@ defmodule Phoenix.Transports.UtilsTest do
 
   test "forces SSL" do
     # Halts
-    conn = Utils.force_ssl(conn(:get, "http://foo.com/"), make_ref(), Endpoint, [])
+    conn = force_ssl(conn(:get, "http://foo.com/"), [])
     assert conn.halted
     assert get_resp_header(conn, "location") == ["https://host.com/"]
 
     # Disabled
-    conn = Utils.force_ssl(conn(:get, "http://foo.com/"), make_ref(), Endpoint, force_ssl: false)
+    conn = force_ssl(conn(:get, "http://foo.com/"), force_ssl: false)
     refute conn.halted
-
-    # No-op when already halted
-    conn = Utils.force_ssl(conn(:get, "http://foo.com/") |> halt(), make_ref(), Endpoint, [])
-    assert conn.halted
-    assert get_resp_header(conn, "location") == []
 
     # Valid
-    conn = Utils.force_ssl(conn(:get, "https://foo.com/"), make_ref(), Endpoint, [])
+    conn = Utils.force_ssl(conn(:get, "https://foo.com/"), [])
     refute conn.halted
+  end
+
+  defp force_ssl(conn, transport_opts) do
+    Utils.force_ssl(conn, Utils.force_ssl_config(transport_opts, Endpoint))
   end
 end

@@ -51,17 +51,17 @@ defmodule Phoenix.Transports.WebSocket do
   import Plug.Conn, only: [fetch_query_params: 1, send_resp: 3]
 
   @doc false
-  def init(%Plug.Conn{method: "GET"} = conn, {endpoint, socket_handler, transport}) do
+  def init(%Plug.Conn{method: "GET"} = conn, {endpoint, driver, config}) do
     alias Phoenix.Transports
 
-    {_, opts} = socket_handler.__transport__(transport)
+    transport_opts = config.transport_opts
 
-    with %{halted: false} = conn <- Transports.Utils.code_reload(conn, opts, endpoint),
+    with %{halted: false} = conn <- Transports.Utils.code_reload(conn, transport_opts, endpoint),
          %{halted: false} = conn <- fetch_query_params(conn),
-         %{halted: false} = conn <- Transports.Utils.transport_log(conn, opts[:transport_log]),
-         %{halted: false} = conn <- Transports.Utils.force_ssl(conn, socket_handler, endpoint, opts),
-         do: Transports.Utils.check_origin(conn, socket_handler, endpoint, opts)
-    |> init_driver(endpoint, socket_handler, transport, opts)
+         %{halted: false} = conn <- Transports.Utils.transport_log(conn, transport_opts[:transport_log]),
+         %{halted: false} = conn <- Transports.Utils.force_ssl(conn, transport_opts),
+         do: Transports.Utils.check_origin(conn, endpoint, transport_opts)
+    |> init_driver(endpoint, driver, config)
   end
 
   def init(conn, _) do
@@ -70,14 +70,15 @@ defmodule Phoenix.Transports.WebSocket do
   end
 
   @doc false
-  def ws_init({driver_state, opts}) do
+  def ws_init({driver, driver_state, config}) do
     {
       :ok,
       %{
+        driver: driver,
         driver_state: driver_state,
-        serializer: Keyword.fetch!(opts, :serializer)
+        serializer: Keyword.fetch!(config.transport_opts, :serializer)
       },
-      Keyword.fetch!(opts, :timeout)
+      Keyword.fetch!(config.transport_opts, :timeout)
     }
   end
 
@@ -85,14 +86,14 @@ defmodule Phoenix.Transports.WebSocket do
   def ws_handle(opcode, payload, state) do
     payload
     |> state.serializer.decode!(opcode: opcode)
-    |> Phoenix.Socket.Driver.handle_in(state.driver_state)
+    |> state.driver.handle_in(state.driver_state)
     |> handle_driver_response(state)
   end
 
   @doc false
   def ws_info(message, state) do
     message
-    |> Phoenix.Socket.Driver.handle_info(state.driver_state)
+    |> state.driver.handle_info(state.driver_state)
     |> handle_driver_response(state)
   end
 
@@ -103,15 +104,15 @@ defmodule Phoenix.Transports.WebSocket do
 
   @doc false
   def ws_close(state) do
-    Phoenix.Socket.Driver.close(state.driver_state)
+    state.driver.close(state.driver_state)
   end
 
 
-  defp init_driver(%{halted: true} = conn, _, _, _, _), do: {:error, conn}
-  defp init_driver(conn, endpoint, socket_handler, transport, opts) do
-    case Phoenix.Socket.Driver.init(endpoint, socket_handler, transport, __MODULE__, conn.params) do
+  defp init_driver(%{halted: true} = conn, _, _, _), do: {:error, conn}
+  defp init_driver(conn, endpoint, driver, config) do
+    case driver.init(endpoint, config, conn.params) do
       {:ok, driver_state} ->
-        {:ok, conn, {__MODULE__, {driver_state, opts}}}
+        {:ok, conn, {__MODULE__, {driver, driver_state, config}}}
       :error ->
         send_resp(conn, 403, "")
         {:error, conn}

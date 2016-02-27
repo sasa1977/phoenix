@@ -1,5 +1,30 @@
 # TODO(sj): rename and move the file to the proper place
 defmodule Phoenix.Transports.Driver do
+  defmodule Config do
+    @moduledoc ~S"""
+    This module defines the struct which is used to pass various parameters
+    describing the transports driver connection. The struct contains following
+    fields:
+
+      * `transport` - the transport module responsible for communication between
+        the client and the server. This module is the first pluggable point which
+        receives the request from the underlying web server.
+      * `transport_name` - an atom which uniquely identifies the transport,
+        for example `:websocket` or `:longpoll`
+      * `transport_opts` - transport specific options
+      * `driver_opts` - driver specific options
+    """
+
+    @type t :: %__MODULE__{
+                  transport: module,
+                  transport_name: atom,
+                  transport_opts: any,
+                  driver_opts: any
+                }
+
+    defstruct [:driver_opts, :transport, :transport_name, :transport_opts]
+  end
+
   @moduledoc """
   Defines a contract for transport drivers.
 
@@ -22,13 +47,31 @@ defmodule Phoenix.Transports.Driver do
   #           settle on the configuration mechanism
 
   @doc """
+  Returns all transport specifications for the given endpoint.
+
+  This function is invoked to provide dispatch specifications for each desired
+  transport mechanism. The result is a list of elements, each element being a
+  tuple that specifies the full path and driver configuration for the transport.
+  See `Phoenix.Transports.Driver.Config` for description of driver configuration.
+
+  It is the responsibility of the implementation to merge any user specific
+  options with the default transport options. The latter can be obtained by
+  calling `default_config` on the transport module (see `Phoenix.Transport`).
+
+  The implementation can also use some helper functions from `Phoenix.Transports.Utils`
+  to configure some transport settings, such as ssl or origin check. Refer to the
+  implementation in `Phoenix.Socket.Driver` for an example.
+  """
+  @callback transports(endpoint :: atom, driver_opts :: any) ::
+    [{path :: String.t, config :: Config.t}]
+
+  @doc """
   Initializes the driver.
 
   The implementation must produce the initial state, or otherwise return an
   `:error` atom, in which case the connection will be closed.
   """
-  # TODO(sj): consider bundling these args into a struct
-  @callback init(endpoint :: atom, socket_handler :: atom, transport_name :: atom, transport :: atom, params :: any) ::
+  @callback init(endpoint :: atom, config :: Config.t, params :: any) ::
     {:ok, initial_state :: any} | :error
 
   @doc """

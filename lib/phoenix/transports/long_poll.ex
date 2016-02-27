@@ -61,24 +61,24 @@ defmodule Phoenix.Transports.LongPoll do
   end
 
   @doc false
-  def call(conn, {endpoint, socket_handler, transport}) do
+  def call(conn, {endpoint, driver, config}) do
     alias Phoenix.Transports
 
-    {_, opts} = socket_handler.__transport__(transport)
+    transport_opts = config.transport_opts
 
-    with %{halted: false} = conn <- Transports.Utils.code_reload(conn, opts, endpoint),
+    with %{halted: false} = conn <- Transports.Utils.code_reload(conn, transport_opts, endpoint),
          %{halted: false} = conn <- fetch_query_params(conn),
-         %{halted: false} = conn <- Transports.Utils.transport_log(conn, opts[:transport_log]),
-         %{halted: false} = conn <- Transports.Utils.force_ssl(conn, socket_handler, endpoint, opts),
-         %{halted: false} = conn <- Transports.Utils.check_origin(conn, socket_handler, endpoint,
-                                                                  opts, &status_json(&1, %{})),
+         %{halted: false} = conn <- Transports.Utils.transport_log(conn, transport_opts[:transport_log]),
+         %{halted: false} = conn <- Transports.Utils.force_ssl(conn, transport_opts),
+         %{halted: false} = conn <- Transports.Utils.check_origin(conn, endpoint,
+                                                                  transport_opts, &status_json(&1, %{})),
          %{halted: false} = conn <- put_resp_header(conn, "access-control-allow-origin", "*"),
-         do: dispatch(conn, endpoint, socket_handler, transport, opts)
+         do: dispatch(conn, endpoint, driver, config)
   end
 
   # Responds to pre-flight CORS requests with Allow-Origin-* headers.
   # We allow cross-origin requests as we always validate the Origin header.
-  defp dispatch(%{method: "OPTIONS"} = conn, _, _, _, _) do
+  defp dispatch(%{method: "OPTIONS"} = conn, _, _, _) do
     headers = get_req_header(conn, "access-control-request-headers") |> Enum.join(", ")
 
     conn
@@ -89,27 +89,27 @@ defmodule Phoenix.Transports.LongPoll do
   end
 
   # Starts a new session or listen to a message if one already exists.
-  defp dispatch(%{method: "GET"} = conn, endpoint, socket_handler, transport, opts) do
-    case resume_session(conn.params, endpoint, opts) do
+  defp dispatch(%{method: "GET"} = conn, endpoint, driver, config) do
+    case resume_session(conn.params, endpoint, config) do
       {:ok, server_ref} ->
-        listen(conn, server_ref, endpoint, opts)
+        listen(conn, server_ref, endpoint, config)
       :error ->
-        new_session(conn, endpoint, socket_handler, transport, opts)
+        new_session(conn, endpoint, driver, config)
     end
   end
 
   # Publish the message encoded as a JSON body.
-  defp dispatch(%{method: "POST"} = conn, endpoint, _, _, opts) do
-    case resume_session(conn.params, endpoint, opts) do
+  defp dispatch(%{method: "POST"} = conn, endpoint, _, config) do
+    case resume_session(conn.params, endpoint, config) do
       {:ok, server_ref} ->
-        conn |> parse_json() |> publish(server_ref, endpoint, opts)
+        conn |> parse_json() |> publish(server_ref, endpoint, config)
       :error ->
         conn |> put_status(:gone) |> status_json(%{})
     end
   end
 
   # All other requests should fail.
-  defp dispatch(conn, _, _, _, _) do
+  defp dispatch(conn, _, _, _) do
     conn |> send_resp(:bad_request, "")
   end
 
@@ -122,26 +122,25 @@ defmodule Phoenix.Transports.LongPoll do
 
   ## Connection helpers
 
-  defp new_session(conn, endpoint, socket_handler, transport, opts) do
+  defp new_session(conn, endpoint, driver, config) do
     priv_topic =
       "phx:lp:"
       <> Base.encode64(:crypto.strong_rand_bytes(16))
       <> (:os.timestamp() |> Tuple.to_list |> Enum.join(""))
 
-    args = [endpoint, socket_handler, transport, __MODULE__,
-            conn.params, opts[:window_ms], priv_topic]
+    args = [endpoint, driver, config, conn.params, priv_topic]
 
     case Supervisor.start_child(LongPoll.Supervisor, args) do
       {:ok, :undefined} ->
         conn |> put_status(:forbidden) |> status_json(%{})
       {:ok, server_pid} ->
         data  = {:v1, endpoint.config(:endpoint_id), server_pid, priv_topic}
-        token = sign_token(endpoint, data, opts)
+        token = sign_token(endpoint, data, config)
         conn |> put_status(:gone) |> status_json(%{token: token})
     end
   end
 
-  defp listen(conn, server_ref, endpoint, opts) do
+  defp listen(conn, server_ref, endpoint, config) do
     ref = make_ref()
 
     broadcast_from!(endpoint, server_ref, {:flush, client_ref(server_ref), ref})
@@ -156,10 +155,10 @@ defmodule Phoenix.Transports.LongPoll do
           receive do
             {:messages, messages, ^ref} -> {:ok, messages}
           after
-            opts[:window_ms]  -> {:no_content, []}
+            config.transport_opts[:window_ms]  -> {:no_content, []}
           end
       after
-        opts[:window_ms] ->
+        config.transport_opts[:window_ms] ->
           {:no_content, []}
       end
 
@@ -168,10 +167,10 @@ defmodule Phoenix.Transports.LongPoll do
     |> status_json(%{token: conn.params["token"], messages: messages})
   end
 
-  defp publish(conn, server_ref, endpoint, opts) do
+  defp publish(conn, server_ref, endpoint, config) do
     msg = Message.from_map!(conn.body_params)
 
-    case transport_dispatch(endpoint, server_ref, msg, opts) do
+    case transport_dispatch(endpoint, server_ref, msg, config) do
       :ok               -> conn |> put_status(:ok) |> status_json(%{})
       {:error, _reason} -> conn |> put_status(:unauthorized) |> status_json(%{})
     end
@@ -181,8 +180,8 @@ defmodule Phoenix.Transports.LongPoll do
 
   # Retrieves the serialized `Phoenix.LongPoll.Server` pid
   # by publishing a message in the encrypted private topic.
-  defp resume_session(%{"token" => token}, endpoint, opts) do
-    case verify_token(endpoint, token, opts) do
+  defp resume_session(%{"token" => token}, endpoint, config) do
+    case verify_token(endpoint, token, config) do
       {:ok, {:v1, id, pid, priv_topic}} ->
         server_ref = server_ref(endpoint.config(:endpoint_id), id, pid, priv_topic)
 
@@ -193,17 +192,17 @@ defmodule Phoenix.Transports.LongPoll do
         receive do
           {:subscribe, ^ref} -> {:ok, server_ref}
         after
-          opts[:pubsub_timeout_ms]  -> :error
+          config.transport_opts[:pubsub_timeout_ms]  -> :error
         end
 
       _ ->
         :error
     end
   end
-  defp resume_session(_params, _endpoint, _opts), do: :error
+  defp resume_session(_params, _endpoint, _config), do: :error
 
   # Publishes a message to the pubsub system.
-  defp transport_dispatch(endpoint, server_ref, msg, opts) do
+  defp transport_dispatch(endpoint, server_ref, msg, config) do
     ref = make_ref()
     broadcast_from!(endpoint, server_ref, {:dispatch, client_ref(server_ref), msg, ref})
 
@@ -211,7 +210,7 @@ defmodule Phoenix.Transports.LongPoll do
       {:dispatch, ^ref}      -> :ok
       {:error, reason, ^ref} -> {:error, reason}
     after
-      opts[:window_ms] -> {:error, :timeout}
+      config.transport_opts[:window_ms] -> {:error, :timeout}
     end
   end
 
@@ -236,12 +235,16 @@ defmodule Phoenix.Transports.LongPoll do
   defp broadcast_from!(_endpoint, pid, msg) when is_pid(pid),
     do: send(pid, msg)
 
-  defp sign_token(endpoint, data, opts) do
-    Phoenix.Token.sign(endpoint, Atom.to_string(endpoint.__pubsub_server__), data, opts[:crypto])
+  defp sign_token(endpoint, data, config) do
+    Phoenix.Token.sign(endpoint, Atom.to_string(endpoint.__pubsub_server__), data,
+      config.transport_opts[:crypto]
+    )
   end
 
-  defp verify_token(endpoint, signed, opts) do
-    Phoenix.Token.verify(endpoint, Atom.to_string(endpoint.__pubsub_server__), signed, opts[:crypto])
+  defp verify_token(endpoint, signed, config) do
+    Phoenix.Token.verify(endpoint, Atom.to_string(endpoint.__pubsub_server__), signed,
+      config.transport_opts[:crypto]
+    )
   end
 
   defp status_json(conn, data) do

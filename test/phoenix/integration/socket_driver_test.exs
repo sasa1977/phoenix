@@ -6,6 +6,7 @@ defmodule Phoenix.Integration.SocketDriverTest do
   alias Phoenix.Socket.Message
   alias Phoenix.Socket.Reply
   alias Phoenix.Socket.Broadcast
+  alias Phoenix.Transports
   alias __MODULE__.Endpoint
 
   Application.put_env(:phoenix, Endpoint, [
@@ -280,9 +281,12 @@ defmodule Phoenix.Integration.SocketDriverTest do
   defp init_driver(params \\ %{}) do
     Driver.init(
       Endpoint,
-      MySocket,
-      :transport,
-      MyTransport,
+      %Transports.Driver.Config{
+        transport: MyTransport,
+        transport_name: :transport,
+        transport_opts: MyTransport.default_config,
+        driver_opts: [socket_handler: MySocket]
+      },
       Map.merge(%{"vsn" => Driver.protocol_version}, params)
     )
   end

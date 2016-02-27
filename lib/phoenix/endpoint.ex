@@ -419,7 +419,7 @@ defmodule Phoenix.Endpoint do
       import Phoenix.Endpoint
 
       Module.register_attribute(__MODULE__, :plugs, accumulate: true)
-      Module.register_attribute(__MODULE__, :phoenix_sockets, accumulate: true)
+      Module.register_attribute(__MODULE__, :phoenix_drivers, accumulate: true)
       @before_compile Phoenix.Endpoint
 
       def init(opts) do
@@ -569,7 +569,7 @@ defmodule Phoenix.Endpoint do
 
   @doc false
   defmacro __before_compile__(env) do
-    sockets = Module.get_attribute(env.module, :phoenix_sockets)
+    drivers = Module.get_attribute(env.module, :phoenix_drivers)
     plugs = Module.get_attribute(env.module, :plugs)
     {conn, body} = Plug.Builder.compile(env, plugs, [])
     otp_app = Module.get_attribute(env.module, :otp_app)
@@ -579,9 +579,9 @@ defmodule Phoenix.Endpoint do
       defp phoenix_pipeline(unquote(conn)), do: unquote(body)
 
       @doc """
-      Returns all sockets configured in this endpoint.
+      Returns all drivers configured in this endpoint.
       """
-      def __sockets__, do: unquote(sockets)
+      def __drivers__, do: unquote(drivers)
 
       unquote(instrumentation)
     end
@@ -620,7 +620,10 @@ defmodule Phoenix.Endpoint do
     module = tear_alias(module)
 
     quote do
-      @phoenix_sockets {unquote(path), unquote(module)}
+      @phoenix_drivers {Phoenix.Socket.Driver,
+        socket_handler: unquote(module),
+        path: unquote(path)
+      }
     end
   end
 
