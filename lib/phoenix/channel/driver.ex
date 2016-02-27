@@ -8,12 +8,15 @@ defmodule Phoenix.Socket.Driver do
   powered by transports, such as websocket or long polling, while this module
   provides the stock implementation of the protocol, with following properties:
 
-  - Each channel runs in a separate process.
-  - Channel processes are direct children of the socket process.
-  - Termination of a channel process doesn't affect other channel processes or
-    the socket process.
-  - If the socket process terminates, all channel processes will be stopped as well,
-    regardless of the exit reason.
+    * Each channel runs in a separate process.
+
+    * Channel processes are direct children of the socket process.
+
+    * Termination of a channel process doesn't affect other channel processes or
+      the socket process.
+
+    * If the socket process terminates, all channel processes will be stopped as well,
+      regardless of the exit reason.
 
   This module was not meant to be used directly. Instead you can pass it as an option
   to the transport (TODO(sj): explain how, once we settle on the approach). This
