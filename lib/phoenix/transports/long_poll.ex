@@ -66,18 +66,14 @@ defmodule Phoenix.Transports.LongPoll do
 
     {_, opts} = socket_handler.__transport__(transport)
 
-    conn
-    |> Transports.Utils.code_reload(opts, endpoint)
-    |> fetch_query_params
-    |> Transports.Utils.transport_log(opts[:transport_log])
-    |> Transports.Utils.force_ssl(socket_handler, endpoint, opts)
-    |> Transports.Utils.check_origin(socket_handler, endpoint, opts, &status_json(&1, %{}))
-    |> put_resp_header("access-control-allow-origin", "*")
-    |> dispatch(endpoint, socket_handler, transport, opts)
-  end
-
-  defp dispatch(%{halted: true} = conn, _, _, _, _) do
-    conn
+    with %{halted: false} = conn <- Transports.Utils.code_reload(conn, opts, endpoint),
+         %{halted: false} = conn <- fetch_query_params(conn),
+         %{halted: false} = conn <- Transports.Utils.transport_log(conn, opts[:transport_log]),
+         %{halted: false} = conn <- Transports.Utils.force_ssl(conn, socket_handler, endpoint, opts),
+         %{halted: false} = conn <- Transports.Utils.check_origin(conn, socket_handler, endpoint,
+                                                                  opts, &status_json(&1, %{})),
+         %{halted: false} = conn <- put_resp_header(conn, "access-control-allow-origin", "*"),
+         do: dispatch(conn, endpoint, socket_handler, transport, opts)
   end
 
   # Responds to pre-flight CORS requests with Allow-Origin-* headers.

@@ -33,13 +33,8 @@ defmodule Phoenix.Transports.Utils do
   @doc """
   Forces SSL in the socket connection.
 
-  Uses the endpoint configuration to decide so. It is a
-  noop if the connection has been halted.
+  Uses the endpoint configuration to decide so.
   """
-  def force_ssl(%Plug.Conn{halted: true} = conn, _socket, _endpoint, _opts) do
-    conn
-  end
-
   def force_ssl(conn, socket, endpoint, opts) do
     if force_ssl = force_ssl_config(socket, endpoint, opts) do
       Plug.SSL.call(conn, force_ssl)
@@ -81,14 +76,10 @@ defmodule Phoenix.Transports.Utils do
   sent or no origin was configured, it will return the given connection.
 
   Otherwise a otherwise a 403 Forbidden response will be sent and
-  the connection halted.  It is a noop if the connection has been halted.
+  the connection halted. It is the responsibility of the caller to verify
+  whether the connection has been halted, and take corresponding action.
   """
-  def check_origin(conn, handler, endpoint, opts, sender \\ &Plug.Conn.send_resp/1)
-
-  def check_origin(%Plug.Conn{halted: true} = conn, _handler, _endpoint, _opts, _sender),
-    do: conn
-
-  def check_origin(conn, handler, endpoint, opts, sender) do
+  def check_origin(conn, handler, endpoint, opts, sender \\ &Plug.Conn.send_resp/1) do
     import Plug.Conn
     origin       = get_req_header(conn, "origin") |> List.first
     check_origin = check_origin_config(handler, endpoint, opts)

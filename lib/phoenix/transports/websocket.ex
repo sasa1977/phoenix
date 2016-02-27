@@ -56,24 +56,12 @@ defmodule Phoenix.Transports.WebSocket do
 
     {_, opts} = socket_handler.__transport__(transport)
 
-    conn
-    |> Transports.Utils.code_reload(opts, endpoint)
-    |> fetch_query_params
-    |> Transports.Utils.transport_log(opts[:transport_log])
-    |> Transports.Utils.force_ssl(socket_handler, endpoint, opts)
-    |> Transports.Utils.check_origin(socket_handler, endpoint, opts)
-    |> case do
-      %{halted: false} = conn ->
-        case Phoenix.Socket.Driver.init(endpoint, socket_handler, transport, __MODULE__, conn.params) do
-          {:ok, driver_state} ->
-            {:ok, conn, {__MODULE__, {driver_state, opts}}}
-          :error ->
-            send_resp(conn, 403, "")
-            {:error, conn}
-        end
-      %{halted: true} = conn ->
-        {:error, conn}
-    end
+    with %{halted: false} = conn <- Transports.Utils.code_reload(conn, opts, endpoint),
+         %{halted: false} = conn <- fetch_query_params(conn),
+         %{halted: false} = conn <- Transports.Utils.transport_log(conn, opts[:transport_log]),
+         %{halted: false} = conn <- Transports.Utils.force_ssl(conn, socket_handler, endpoint, opts),
+         do: Transports.Utils.check_origin(conn, socket_handler, endpoint, opts)
+    |> init_driver(endpoint, socket_handler, transport, opts)
   end
 
   def init(conn, _) do
@@ -118,6 +106,17 @@ defmodule Phoenix.Transports.WebSocket do
     Phoenix.Socket.Driver.close(state.driver_state)
   end
 
+
+  defp init_driver(%{halted: true} = conn, _, _, _, _), do: {:error, conn}
+  defp init_driver(conn, endpoint, socket_handler, transport, opts) do
+    case Phoenix.Socket.Driver.init(endpoint, socket_handler, transport, __MODULE__, conn.params) do
+      {:ok, driver_state} ->
+        {:ok, conn, {__MODULE__, {driver_state, opts}}}
+      :error ->
+        send_resp(conn, 403, "")
+        {:error, conn}
+    end
+  end
 
   defp handle_driver_response({:stop, reason, driver_state}, state) do
     {:shutdown, reason, %{state | driver_state: driver_state}}
