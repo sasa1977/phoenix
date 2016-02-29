@@ -17,7 +17,7 @@ defmodule Phoenix.SocketTest do
   end
 
   defmodule SpdyTransport do
-    def default_config(), do: []
+    def config(), do: []
   end
 
   test "from_map! converts a map with string keys into a %Message{}" do

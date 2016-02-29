@@ -6,7 +6,6 @@ defmodule Phoenix.Integration.SocketDriverTest do
   alias Phoenix.Socket.Message
   alias Phoenix.Socket.Reply
   alias Phoenix.Socket.Broadcast
-  alias Phoenix.Transports
   alias __MODULE__.Endpoint
 
   Application.put_env(:phoenix, Endpoint, [
@@ -19,10 +18,11 @@ defmodule Phoenix.Integration.SocketDriverTest do
   defmodule MyTransport do
     @behaviour Phoenix.Transport
 
-    def default_config do
-      [
-        serializer: Phoenix.ChannelTest.NoopSerializer
-      ]
+    def config(_endpoint, user_config) do
+      Map.merge(
+        %{serializer: Phoenix.ChannelTest.NoopSerializer},
+        Enum.into(user_config, %{})
+      )
     end
   end
 
@@ -279,16 +279,9 @@ defmodule Phoenix.Integration.SocketDriverTest do
 
 
   defp init_driver(params \\ %{}) do
-    Driver.init(
-      Endpoint,
-      %Transports.Driver.Config{
-        transport: MyTransport,
-        transport_name: :transport,
-        transport_opts: MyTransport.default_config,
-        driver_opts: [socket_handler: MySocket]
-      },
-      Map.merge(%{"vsn" => Driver.protocol_version}, params)
-    )
+    [{_, MyTransport, config}] = Driver.transports(Endpoint, path: "/", socket_handler: MySocket)
+
+    Driver.init(Endpoint, config, Map.merge(%{"vsn" => Driver.protocol_version}, params))
   end
 
   defp join(state, topic, payload \\ %{}) do

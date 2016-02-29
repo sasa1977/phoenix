@@ -40,10 +40,19 @@ defmodule Phoenix.Transports.WebSocket do
 
   @behaviour Phoenix.Transport
 
-  def default_config() do
-    [serializer: Phoenix.Transports.WebSocketSerializer,
-     timeout: 60_000,
-     transport_log: false]
+  def config(endpoint, user_config) do
+    alias Phoenix.Transports
+
+    default_opts =
+      %{serializer: Transports.WebSocketSerializer,
+        timeout: 60_000,
+        transport_log: false,
+        endpoint: endpoint}
+
+    default_opts
+    |> Map.merge(Enum.into(user_config, %{}))
+    |> Transports.Utils.force_ssl_config(endpoint)
+    |> Transports.Utils.check_origin_config(endpoint)
   end
 
   ## Callbacks
@@ -51,17 +60,15 @@ defmodule Phoenix.Transports.WebSocket do
   import Plug.Conn, only: [fetch_query_params: 1, send_resp: 3]
 
   @doc false
-  def init(%Plug.Conn{method: "GET"} = conn, {endpoint, driver, config}) do
+  def init(%Plug.Conn{method: "GET"} = conn, {driver, config}) do
     alias Phoenix.Transports
 
-    transport_opts = config.transport_opts
-
-    with %{halted: false} = conn <- Transports.Utils.code_reload(conn, transport_opts, endpoint),
+    with %{halted: false} = conn <- Transports.Utils.code_reload(conn, config, config.endpoint),
          %{halted: false} = conn <- fetch_query_params(conn),
-         %{halted: false} = conn <- Transports.Utils.transport_log(conn, transport_opts[:transport_log]),
-         %{halted: false} = conn <- Transports.Utils.force_ssl(conn, transport_opts),
-         do: Transports.Utils.check_origin(conn, endpoint, transport_opts)
-    |> init_driver(endpoint, driver, config)
+         %{halted: false} = conn <- Transports.Utils.transport_log(conn, config[:transport_log]),
+         %{halted: false} = conn <- Transports.Utils.force_ssl(conn, config),
+         do: Transports.Utils.check_origin(conn, config.endpoint, config)
+    |> init_driver(driver, config)
   end
 
   def init(conn, _) do
@@ -76,9 +83,9 @@ defmodule Phoenix.Transports.WebSocket do
       %{
         driver: driver,
         driver_state: driver_state,
-        serializer: Keyword.fetch!(config.transport_opts, :serializer)
+        serializer: config.serializer
       },
-      Keyword.fetch!(config.transport_opts, :timeout)
+      config.timeout
     }
   end
 
@@ -108,9 +115,9 @@ defmodule Phoenix.Transports.WebSocket do
   end
 
 
-  defp init_driver(%{halted: true} = conn, _, _, _), do: {:error, conn}
-  defp init_driver(conn, endpoint, driver, config) do
-    case driver.init(endpoint, config, conn.params) do
+  defp init_driver(%{halted: true} = conn, _, _), do: {:error, conn}
+  defp init_driver(conn, driver, config) do
+    case driver.init(config.endpoint, config, conn.params) do
       {:ok, driver_state} ->
         {:ok, conn, {__MODULE__, {driver, driver_state, config}}}
       :error ->

@@ -22,25 +22,25 @@ defmodule Phoenix.Transports.LongPoll.Server do
 
   alias Phoenix.PubSub
 
-  def start_link(endpoint, driver, config, params, priv_topic) do
-    GenServer.start_link(__MODULE__, [endpoint, driver, config, params, priv_topic])
+  def start_link(driver, config, params, priv_topic) do
+    GenServer.start_link(__MODULE__, [driver, config, params, priv_topic])
   end
 
   ## Callbacks
 
-  def init([endpoint, driver, config, params, priv_topic]) do
-    case driver.init(endpoint, config, params) do
+  def init([driver, config, params, priv_topic]) do
+    case driver.init(config.endpoint, config, params) do
       {:ok, driver_state} ->
         state = %{buffer: [],
                   driver: driver,
                   driver_state: driver_state,
-                  window_ms: trunc(config.transport_opts[:window_ms] * 1.5),
+                  window_ms: trunc(config.window_ms * 1.5),
                   priv_topic: priv_topic,
                   last_client_poll: now_ms(),
-                  endpoint: endpoint,
+                  endpoint: config.endpoint,
                   client_ref: nil}
 
-        :ok = endpoint.subscribe(self, priv_topic, link: true)
+        :ok = config.endpoint.subscribe(self, priv_topic, link: true)
         schedule_inactive_shutdown(state.window_ms)
 
         {:ok, state}

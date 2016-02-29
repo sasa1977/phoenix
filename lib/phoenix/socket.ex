@@ -287,8 +287,6 @@ defmodule Phoenix.Socket do
 
   @doc false
   def merge_transport_spec(transports, name, module, config) do
-    config = Keyword.merge(module.default_config() , config)
-
     Map.update(transports, name, {module, config}, fn {dup_module, _} ->
       raise ArgumentError,
         "duplicate transports (#{inspect dup_module} and #{inspect module}) defined for #{inspect name}."

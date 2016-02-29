@@ -26,7 +26,7 @@ defmodule Phoenix.Transports.UtilsTest do
 
   defp check_origin(origin, opts) do
     conn = conn(:get, "/") |> put_req_header("origin", origin)
-    Utils.check_origin(conn, Endpoint, Utils.check_origin_config(opts, Endpoint))
+    Utils.check_origin(conn, Endpoint, Utils.check_origin_config(Enum.into(opts, %{}), Endpoint))
   end
 
   test "does not check origin if disabled" do
@@ -131,7 +131,7 @@ defmodule Phoenix.Transports.UtilsTest do
     refute conn.halted
   end
 
-  defp force_ssl(conn, transport_opts) do
-    Utils.force_ssl(conn, Utils.force_ssl_config(transport_opts, Endpoint))
+  defp force_ssl(conn, config) do
+    Utils.force_ssl(conn, Utils.force_ssl_config(Enum.into(config, %{}), Endpoint))
   end
 end

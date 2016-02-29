@@ -40,31 +40,27 @@ defmodule Phoenix.Socket.Driver do
 
   @doc false
   def transports(endpoint, driver_opts) do
-    alias Phoenix.Transports
-
     socket_handler = Keyword.fetch!(driver_opts, :socket_handler)
     path = Keyword.fetch!(driver_opts, :path)
 
-    for {transport_name, {transport, transport_opts}} <- socket_handler.__transports__ do
+    for {transport_name, {transport, user_config}} <- socket_handler.__transports__ do
+      user_config =
+        [transport: transport,
+         transport_name: transport_name,
+         socket_handler: socket_handler] ++ user_config
+
       {
         Path.join(path, Atom.to_string(transport_name)),
-        %Transports.Driver.Config{
-          driver_opts: driver_opts,
-          transport: transport,
-          transport_name: transport_name,
-          transport_opts:
-            transport_opts
-            |> Transports.Utils.force_ssl_config(endpoint)
-            |> Transports.Utils.check_origin_config(endpoint)
-        }
+        transport,
+        transport.config(endpoint, user_config)
       }
     end
   end
 
   @doc false
   def init(endpoint, config, params) do
-    socket_handler = Keyword.fetch!(config.driver_opts, :socket_handler)
-    serializer = Keyword.fetch!(config.transport_opts, :serializer)
+    socket_handler = config.socket_handler
+    serializer = config.serializer
 
     case connect(endpoint, socket_handler, config.transport_name, config.transport, serializer, params) do
       :error -> :error

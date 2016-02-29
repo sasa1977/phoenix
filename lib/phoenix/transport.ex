@@ -16,7 +16,7 @@ defmodule Phoenix.Transport do
 
   The transport behaviour requires the following function:
 
-    * `default_config/0` - returns the default transport configuration
+    * `config/0` - returns the default transport configuration
   """
   # TODO(sj): explain the responsibilities of the concrete implementation in more details,
   #           once we're settled on the exact interface
@@ -24,5 +24,5 @@ defmodule Phoenix.Transport do
   @doc """
   Provides a keyword list of default configuration for transports.
   """
-  @callback default_config() :: Keyword.t
+  @callback config(endpoint :: atom, user_config :: Keyword.t) :: %{atom => any}
 end

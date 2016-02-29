@@ -24,7 +24,7 @@ defmodule Phoenix.Transports.Utils do
   Invokes the code reloader if it is configured in the endpoint.
   """
   def code_reload(conn, opts, endpoint) do
-    reload? = Keyword.get(opts, :code_reloader, endpoint.config(:code_reloader))
+    reload? = Map.get(opts, :code_reloader, endpoint.config(:code_reloader))
     if reload?, do: Phoenix.CodeReloader.reload!(endpoint)
 
     conn
@@ -35,8 +35,8 @@ defmodule Phoenix.Transports.Utils do
 
   Uses the endpoint configuration to decide so.
   """
-  def force_ssl(conn, transport_opts) do
-    if force_ssl = transport_opts[:force_ssl] do
+  def force_ssl(conn, config) do
+    if force_ssl = config[:force_ssl] do
       Plug.SSL.call(conn, force_ssl)
     else
       conn
@@ -47,18 +47,18 @@ defmodule Phoenix.Transports.Utils do
   Configures the `:force_ssl` transport option.
 
   This function can be used by custom drivers when they are initializing transport
-  options. The function returns the modified transport options keyword list with
+  options. The function returns the modified transport options map with
   force ssl setting configured based on input transport and endpoint settings.
   """
-  def force_ssl_config(transport_opts, endpoint) do
-    if force_ssl = Keyword.get(transport_opts, :force_ssl, endpoint.config(:force_ssl)) do
-      Keyword.put(transport_opts, :force_ssl,
+  def force_ssl_config(config, endpoint) do
+    if force_ssl = Map.get(config, :force_ssl, endpoint.config(:force_ssl)) do
+      Map.put(config, :force_ssl,
         force_ssl
         |> Keyword.put_new(:host, endpoint.config(:url)[:host] || "localhost")
         |> Plug.SSL.init()
       )
     else
-      transport_opts
+      config
     end
   end
 
@@ -86,10 +86,10 @@ defmodule Phoenix.Transports.Utils do
   the connection halted. It is the responsibility of the caller to verify
   whether the connection has been halted, and take corresponding action.
   """
-  def check_origin(conn, endpoint, transport_opts, sender \\ &Plug.Conn.send_resp/1) do
+  def check_origin(conn, endpoint, config, sender \\ &Plug.Conn.send_resp/1) do
     import Plug.Conn
     origin       = get_req_header(conn, "origin") |> List.first
-    check_origin = transport_opts[:check_origin]
+    check_origin = config[:check_origin]
 
     cond do
       is_nil(origin) or check_origin == false ->
@@ -127,19 +127,19 @@ defmodule Phoenix.Transports.Utils do
   Configures the `:check_origin` transport option.
 
   This function can be used by custom drivers when they are initializing transport
-  options. The function returns the modified transport options keyword list with
+  options. The function returns the modified transport options map with
   check origin setting configured based on input transport and endpoint settings.
   """
-  def check_origin_config(transport_opts, endpoint) do
+  def check_origin_config(config, endpoint) do
     check_origin =
-      case Keyword.get(transport_opts, :check_origin, endpoint.config(:check_origin)) do
+      case Map.get(config, :check_origin, endpoint.config(:check_origin)) do
         origins when is_list(origins) ->
           Enum.map(origins, &parse_origin/1)
         boolean when is_boolean(boolean) ->
           boolean
       end
 
-    Keyword.put(transport_opts, :check_origin, check_origin)
+    Map.put(config, :check_origin, check_origin)
   end
 
   defp parse_origin(origin) do
