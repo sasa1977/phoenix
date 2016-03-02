@@ -162,17 +162,6 @@ defmodule Phoenix.Integration.WebSocketTest do
     assert_receive {:DOWN, _, :process, ^channel, {:shutdown, :closed}}
   end
 
-  test "refuses websocket events that haven't joined" do
-    {:ok, sock} = WebsocketClient.start_link(self, "ws://127.0.0.1:#{@port}/ws/websocket")
-
-    WebsocketClient.send_event(sock, "rooms:lobby", "new_msg", %{body: "hi!"})
-    refute_receive %Message{event: "new_msg"}
-    assert_receive %Message{event: "phx_reply", payload: %{"response" => %{"reason" => "unmatched topic"}}}
-
-    WebsocketClient.send_event(sock, "rooms:lobby1", "new_msg", %{body: "Should ignore"})
-    refute_receive %Message{event: "new_msg"}
- end
-
   test "refuses unallowed origins" do
     capture_log fn ->
       assert {:ok, _} =
@@ -212,21 +201,6 @@ defmodule Phoenix.Integration.WebSocketTest do
     assert_receive {:DOWN, _, :process, ^sock, :normal}
     assert_receive {:DOWN, _, :process, ^chan1, :shutdown}
     assert_receive {:DOWN, _, :process, ^chan2, :shutdown}
-  end
-
-  test "duplicate join event logs and ignores messages" do
-    {:ok, sock} = WebsocketClient.start_link(self, "ws://127.0.0.1:#{@port}/ws/websocket?user_id=1001")
-    WebsocketClient.join(sock, "rooms:joiner", %{})
-    assert_receive %Message{topic: "rooms:joiner", event: "phx_reply",
-                            ref: "1", payload: %{"response" => %{}, "status" => "ok"}}
-
-    log = capture_log fn ->
-      WebsocketClient.join(sock, "rooms:joiner", %{})
-      assert_receive %Message{topic: "rooms:joiner", event: "phx_reply",
-                              payload: %{"response" => %{"reason" => "already joined"},
-                                         "status" => "error"}}
-    end
-    assert log =~ "Phoenix.Integration.WebSocketTest.RoomChannel received join event with topic \"rooms:joiner\" but channel already joined"
   end
 
   test "returns 403 when versions to not match" do
