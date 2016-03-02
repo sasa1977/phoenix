@@ -280,13 +280,13 @@ defmodule Phoenix.Socket do
   """
   defmacro transport(name, module, config \\ []) do
     quote do
-      @phoenix_transports Phoenix.Socket.merge_transport_spec(
+      @phoenix_transports Phoenix.Socket.__merge_transport_spec__(
         @phoenix_transports, unquote(name), unquote(module), unquote(config))
     end
   end
 
   @doc false
-  def merge_transport_spec(transports, name, module, config) do
+  def __merge_transport_spec__(transports, name, module, config) do
     Map.update(transports, name, {module, config}, fn {dup_module, _} ->
       raise ArgumentError,
         "duplicate transports (#{inspect dup_module} and #{inspect module}) defined for #{inspect name}."
