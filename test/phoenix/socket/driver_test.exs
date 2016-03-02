@@ -1,4 +1,4 @@
-defmodule Phoenix.Integration.SocketDriverTest do
+defmodule Phoenix.Socket.DriverTest do
   use ExUnit.Case, async: true
   import ExUnit.CaptureLog
 
