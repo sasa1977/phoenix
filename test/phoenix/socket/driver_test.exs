@@ -140,23 +140,15 @@ defmodule Phoenix.Socket.DriverTest do
   test "joining an unmatched channel" do
     {:ok, state} = init_driver()
 
-    assert  {
-              :error,
-              :unmatched_topic,
-              [%Reply{topic: "unmatched:channel", status: :error, payload: %{reason: "unmatched topic"}}],
-              _state
-            } = join(state, "unmatched:channel")
+    assert {:error, :unmatched_topic, [reply], _state} = join(state, "unmatched:channel")
+    assert %Reply{topic: "unmatched:channel", status: :error, payload: %{reason: "unmatched topic"}} = reply
   end
 
   test "send before join" do
     {:ok, state} = init_driver()
 
-    assert  {
-              :error,
-              :unmatched_topic,
-              [%Reply{topic: "rooms:lobby", status: :error, payload: %{reason: "unmatched topic"}}],
-              _state
-            } = send_in(state, "rooms:lobby", "new_msg")
+    assert  {:error, :unmatched_topic, [reply], _state} = send_in(state, "rooms:lobby", "new_msg")
+    assert %Reply{topic: "rooms:lobby", status: :error, payload: %{reason: "unmatched topic"}} = reply
   end
 
   test "in, info, and out messages" do
@@ -181,8 +173,8 @@ defmodule Phoenix.Socket.DriverTest do
   test "heartbeat message" do
     {:ok, state} = init_driver()
 
-    assert  {:ok, [%Reply{topic: "phoenix", status: :ok, ref: "123"}], _state} =
-            send_in(state, "phoenix", "heartbeat")
+    assert {:ok, [reply], _state} = send_in(state, "phoenix", "heartbeat")
+    assert %Reply{topic: "phoenix", status: :ok, ref: "123"} = reply
   end
 
   test "receiving disconnect broadcasts on socket's id" do
@@ -209,9 +201,9 @@ defmodule Phoenix.Socket.DriverTest do
     {:ok, _, state} = send_in(state, "rooms:lobby", "stop")
 
     assert_receive {:EXIT, _, :normal} = msg
-    assert  {:ok, [%Message{topic: "rooms:lobby", event: "phx_close", payload: %{}}], state} =
-            Driver.handle_info(msg, state)
-    assert  {:error, :unmatched_topic, _, _} = send_in(state, "rooms:lobby", "new_msg")
+    assert {:ok, [message], state} = Driver.handle_info(msg, state)
+    assert %Message{topic: "rooms:lobby", event: "phx_close", payload: %{}} = message
+    assert {:error, :unmatched_topic, _, _} = send_in(state, "rooms:lobby", "new_msg")
   end
 
   test "client leaving" do
@@ -231,9 +223,9 @@ defmodule Phoenix.Socket.DriverTest do
     assert {:ok, [^out_msg], state} = Driver.handle_info(msg, state)
 
     assert_receive {:EXIT, _, {:shutdown, :left}} = msg
-    assert  {:ok, [%Message{topic: "rooms:lobby", event: "phx_close", payload: %{}}], state} =
-            Driver.handle_info(msg, state)
-    assert  {:error, :unmatched_topic, _, _} = send_in(state, "rooms:lobby", "new_msg")
+    assert {:ok, [message], state} = Driver.handle_info(msg, state)
+    assert %Message{topic: "rooms:lobby", event: "phx_close", payload: %{}} = message
+    assert {:error, :unmatched_topic, _, _} = send_in(state, "rooms:lobby", "new_msg")
   end
 
   test "channel crash" do
@@ -248,10 +240,10 @@ defmodule Phoenix.Socket.DriverTest do
       {:ok, _, state} = send_in(state, "rooms:1", "boom")
 
       assert_receive {:EXIT, ^room1, _} = msg
-      assert  {:ok, [%Message{event: "phx_error", topic: "rooms:1"}], state} = Driver.handle_info(msg, state)
-      assert  {:error, :unmatched_topic, _, state} = send_in(state, "rooms:1", "new_msg")
+      assert {:ok, [%Message{event: "phx_error", topic: "rooms:1"}], state} = Driver.handle_info(msg, state)
+      assert {:error, :unmatched_topic, _, state} = send_in(state, "rooms:1", "new_msg")
       refute_receive {:EXIT, ^room2, _}
-      assert  {:ok, _, _state} = send_in(state, "rooms:2", "new_msg")
+      assert {:ok, _, _state} = send_in(state, "rooms:2", "new_msg")
     end
   end
 
